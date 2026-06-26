@@ -91,7 +91,8 @@ function promoteWaitingAudience(room) {
     .filter(p => p.mode === 'audience')
     .sort((a, b) => Number(a.joinedAt || 0) - Number(b.joinedAt || 0));
 
-  for (const role of openRoles) {
+  const shuffledRoles = openRoles.sort(() => Math.random() - 0.5);
+  for (const role of shuffledRoles) {
     const next = waiting.shift();
     if (!next) break;
     next.mode = 'player';
@@ -115,6 +116,10 @@ function promoteWaitingAudience(room) {
   }
 }
 
+function randomFrom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 function chooseRole(room, clientId, requestedRole) {
   const existing = room.participants.get(clientId);
   const used = new Set(activePlayers(room).filter(p => p.clientId !== clientId).map(p => p.role));
@@ -127,8 +132,8 @@ function chooseRole(room, clientId, requestedRole) {
     return { mode: 'player', role: requestedRole };
   }
 
-  const unused = ROLES.find(role => !used.has(role));
-  if (unused) return { mode: 'player', role: unused };
+  const openRoles = ROLES.filter(role => !used.has(role));
+  if (openRoles.length) return { mode: 'player', role: randomFrom(openRoles) };
   return { mode: 'audience', role: 'audience' };
 }
 

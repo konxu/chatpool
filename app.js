@@ -938,9 +938,12 @@
     if (els.headlineTail) els.headlineTail.textContent = invited ? '”' : '';
     els.inviteCopy.textContent = 'chat together, jam together';
     const roleNote = your?.mode === 'player' && your?.role ? ` · You are ${ROLE_LABEL[your.role]}` : your?.mode === 'audience' ? ' · You are in the audience' : '';
+    els.copyInviteBtn.classList.toggle('is-highlighted', !joined || playerCount < 2);
     els.roomKicker.textContent = joined
-      ? `${playerCount}/${maxPlayers} live${audienceCount ? ` · ${audienceCount} audience` : ''}${roleNote}`
-      : '';
+      ? `${playerCount}/${maxPlayers} live${audienceCount ? ` · ${audienceCount} audience` : ''}${roleNote}${playerCount < 2 ? ' · invite friends to make it a jam' : ''}`
+      : invited
+        ? 'Pick a name to join.'
+        : 'Start a jam, then invite friends.';
 
     renderMessages();
     renderParticipants();
@@ -954,7 +957,9 @@
     if (!messages.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'No messages yet. Type anything to start the jam.';
+      empty.textContent = joined && playerCount < 2
+        ? 'You are in. Invite friends, then type together.'
+        : 'No messages yet. Type anything to start the jam.';
       els.chatLog.appendChild(empty);
       return;
     }

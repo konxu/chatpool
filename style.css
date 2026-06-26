@@ -188,3 +188,21 @@ body[data-joined="true"] .capture-meter{
   body[data-joined="true"] .eyebrow{font-size:.52rem}
   body[data-joined="true"] .copyInviteBtn{max-width:80px}
 }
+
+
+/* v10: make inviting feel like the next natural step, especially before/just after joining. */
+.copyInviteBtn.is-highlighted,
+#copyInviteBtn.is-highlighted{
+  border-color:rgba(245,201,93,.72);
+  background:rgba(245,201,93,.14);
+  color:var(--accent-2);
+  box-shadow:0 0 0 1px rgba(245,201,93,.08), 0 0 20px rgba(245,201,93,.08);
+}
+body[data-joined="false"] .room-kicker{
+  color:var(--muted);
+}
+body[data-joined="true"] .room-kicker{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
