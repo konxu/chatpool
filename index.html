@@ -18,13 +18,13 @@
           <p id="inviteCopy" class="tagline">Chat together, jam together</p>
           <ol id="homeSteps" class="home-steps" aria-label="How Chatjam works">
             <li><span>1</span>Pick a name</li>
-            <li><span>2</span>Send the link</li>
+            <li><span>2</span>Invite a friend</li>
             <li><span>3</span>Type together</li>
           </ol>
           <p class="room-kicker" id="roomKicker"></p>
         </div>
         <div class="header-actions">
-          <button id="copyInviteBtn" class="secondary">Invite friends</button>
+          <button id="copyInviteBtn" class="secondary">Invite a friend</button>
           <button id="recordRoomBtn" class="record-btn" disabled>● Rec</button>
           <a id="downloadClipLink" class="download-link" href="#" download="chatjam-room.webm" hidden>Download clip</a>
           <span id="recordStatus" class="record-status"></span>
@@ -33,8 +33,7 @@
 
       <div class="join-strip">
         <label class="name-field">
-          <span>Your name</span>
-          <input id="nameInput" maxlength="18" placeholder="Your name" autocomplete="nickname" />
+          <input id="nameInput" maxlength="18" placeholder="Your name" autocomplete="nickname" aria-label="Your name" />
         </label>
         <input id="roomInput" type="hidden" maxlength="24" value="jam" />
         <select id="roleSelect" class="visually-hidden" aria-hidden="true" tabindex="-1">

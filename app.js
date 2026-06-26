@@ -20,6 +20,7 @@
   const DEFAULT_VOLUME = 0.78;
   const FRESH_BOOST_SECONDS = 8;
   const CAPTURE_WINDOW_MS = 8000;
+  const INVITE_LABEL = 'Invite a friend';
 
   const $ = (sel) => document.querySelector(sel);
   const els = {
@@ -103,6 +104,7 @@
   let volumePublishTimer = null;
   let typedEvents = [];
   let captureStart = 0;
+  let lastComposerValue = '';
   let isTypingNewPhrase = false;
   let lastPhysicalKeyAt = 0;
   let typingStateTimer = null;
@@ -112,7 +114,7 @@
   clearOldPersistedRoomState();
   els.nameInput.value = name;
   els.roomInput.value = roomId;
-  els.roomTitle.textContent = isInvitePath() ? roomTitle : 'Chatjam';
+  els.roomTitle.textContent = isInvitePath() ? roomTitle : 'Chat together, jam together';
   buildTimeline();
   renderAll();
 
@@ -131,7 +133,7 @@
   els.createRoomBtn.addEventListener('click', async () => {
     const next = makeRoomSlug();
     roomTitle = 'Jam';
-    els.roomTitle.textContent = isInvitePath() ? roomTitle : 'Chatjam';
+    els.roomTitle.textContent = isInvitePath() ? roomTitle : 'Chat together, jam together';
     els.roomInput.value = next;
     await joinRoom(next);
   });
@@ -154,7 +156,7 @@
     try {
       await navigator.clipboard.writeText(link);
       els.copyInviteBtn.textContent = 'Link copied';
-      window.setTimeout(() => (els.copyInviteBtn.textContent = 'Invite friends'), 1200);
+      window.setTimeout(() => (els.copyInviteBtn.textContent = INVITE_LABEL), 1200);
     } catch {
       els.inviteLink.focus();
       els.inviteLink.select();
@@ -183,6 +185,7 @@
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey || isSilentControlKey(e.key)) return;
+    if (isWholeComposerSelected()) resetCaptureState(true);
     lastPhysicalKeyAt = performance.now();
     captureKeyEvent(normaliseKey(e.key));
   });
@@ -195,6 +198,7 @@
     if (now - lastPhysicalKeyAt < 80) return;
     await ensureAudio();
     if (e.inputType === 'insertText' || e.inputType === 'insertCompositionText') {
+      if (isWholeComposerSelected()) resetCaptureState(true);
       const chars = e.data ? Array.from(e.data) : ['.'];
       chars.forEach((char) => captureKeyEvent(char === ' ' ? 'Space' : char));
     } else if (e.inputType === 'deleteContentBackward') {
@@ -205,8 +209,9 @@
   });
 
   els.composer.addEventListener('input', () => {
+    if (!els.composer.value) resetCaptureState(true);
+    lastComposerValue = els.composer.value;
     updateMeter();
-    if (!els.composer.value && !typedEvents.length) sendTypingState(false);
   });
 
   window.addEventListener('beforeunload', () => {
@@ -727,6 +732,19 @@
     return key.slice(0, 18);
   }
 
+  function isWholeComposerSelected() {
+    const value = els.composer.value || '';
+    return value.length > 0 && els.composer.selectionStart === 0 && els.composer.selectionEnd === value.length;
+  }
+
+  function resetCaptureState(notify = false) {
+    typedEvents = [];
+    captureStart = 0;
+    stopMeterTimer();
+    updateMeter();
+    if (notify) sendTypingState(false, true);
+  }
+
   function captureKeyEvent(key) {
     if (!joined) return;
     const now = performance.now();
@@ -782,6 +800,7 @@
 
   function resetComposer() {
     els.composer.value = '';
+    lastComposerValue = '';
     typedEvents = [];
     captureStart = 0;
     isTypingNewPhrase = false;
@@ -925,6 +944,7 @@
     const home = !joined && !invited;
 
     els.joinBtn.textContent = joined ? 'Joined' : invited ? 'Join jam' : 'Start jam';
+    if (els.copyInviteBtn && els.copyInviteBtn.textContent !== 'Link copied') els.copyInviteBtn.textContent = INVITE_LABEL;
     if (els.createRoomBtn) els.createRoomBtn.hidden = true;
     if (els.modeStatus) els.modeStatus.textContent = your ? `${your.mode}${your.isHost ? ' / host' : ''}` : 'not joined';
     els.clearMineBtn.disabled = !your || your.mode !== 'player';
@@ -954,11 +974,14 @@
     els.roomTitle.setAttribute('aria-label', titleIsEditable ? 'Jam name' : 'Chatjam title');
 
     if (document.activeElement !== els.roomTitle) {
-      els.roomTitle.textContent = home ? 'Chatjam' : (roomTitle || titleFromRoomId(roomId));
+      els.roomTitle.textContent = home ? 'Chat together, jam together' : (roomTitle || titleFromRoomId(roomId));
     }
     if (els.headlineLead) els.headlineLead.textContent = invited ? 'You were invited to join “' : '';
     if (els.headlineTail) els.headlineTail.textContent = invited ? '”' : '';
-    if (els.inviteCopy) els.inviteCopy.textContent = 'Chat together, jam together';
+    if (els.inviteCopy) {
+      els.inviteCopy.textContent = invited ? 'Chat together, jam together' : '';
+      els.inviteCopy.hidden = home || joined;
+    }
     if (els.homeSteps) els.homeSteps.hidden = !home;
 
     const roleNote = your?.mode === 'player' && your?.role
@@ -968,7 +991,7 @@
         : '';
     els.copyInviteBtn.classList.toggle('is-highlighted', !joined || playerCount < 2);
     els.roomKicker.textContent = joined
-      ? `${playerCount}/${maxPlayers} live${audienceCount ? ` · ${audienceCount} audience` : ''}${roleNote}${playerCount < 2 ? ' · Invite friends to make it a jam' : ''}`
+      ? `${playerCount}/${maxPlayers} live${audienceCount ? ` · ${audienceCount} audience` : ''}${roleNote}${playerCount < 2 ? ' · Invite a friend to make it a jam' : ''}`
       : '';
 
     renderMessages();
@@ -993,7 +1016,7 @@
       empty.className = 'empty-state';
       const playerCount = getPlayerCount();
       empty.textContent = joined && playerCount < 2
-        ? 'Invite friends, then type together.'
+        ? 'Invite a friend, then type together.'
         : joined
           ? 'No messages yet. Type anything to start the jam.'
           : 'Start a jam to begin.';
