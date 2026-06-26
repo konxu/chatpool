@@ -106,3 +106,36 @@ h1{margin:0;font-size:clamp(2.2rem,6vw,5.8rem);line-height:.93;letter-spacing:-.
 .track-card.away{opacity:.68}
 #tempoHint{color:var(--muted);font-weight:500;margin-left:4px;font-size:.78rem}
 @media (max-width:900px){.invite-card{grid-template-columns:1fr}.invite-actions{grid-template-columns:1fr}}
+
+/* v4: simplified room / invite block */
+.room-card{
+  display:grid;
+  grid-template-columns:minmax(0,1.2fr) auto minmax(280px,.95fr);
+  gap:16px;
+  align-items:end;
+  margin-bottom:20px;
+  padding:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01)), var(--panel-2);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.room-main{display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,.75fr);gap:14px;align-items:end;min-width:0}
+.room-kicker{margin:0 0 .32rem;color:var(--accent);font-size:.76rem;letter-spacing:.11em;text-transform:uppercase;font-weight:900}
+.room-card strong{display:block;font-size:1.16rem;letter-spacing:-.03em}
+.room-card p{margin:.35rem 0 0;color:var(--muted);line-height:1.42;font-size:.9rem}
+.room-actions{display:flex;gap:10px;align-items:center;justify-content:flex-end;white-space:nowrap}
+.room-actions .primary{min-width:150px}
+.room-card .invite-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;min-width:0}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.transport-row button:nth-child(4){display:none}
+@media (max-width:1100px){
+  .room-card{grid-template-columns:1fr}
+  .room-main{grid-template-columns:1fr}
+  .room-actions{justify-content:flex-start;flex-wrap:wrap}
+}
+@media (max-width:600px){
+  .room-card .invite-actions{grid-template-columns:1fr}
+  .room-actions{display:grid;grid-template-columns:1fr;width:100%}
+  .room-actions .primary{min-width:0}
+}

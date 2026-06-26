@@ -3,22 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Looproom — Type Instrument Chat</title>
-  <link rel="stylesheet" href="./style.css" />
+  <title>Chatpool — Type Jam Room</title>
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <main class="app-shell">
     <section class="hero">
       <div>
-        <p class="eyebrow">TYPE INSTRUMENT / LOOPROOM V3</p>
-        <h1>A tiny band room where everyone’s typing becomes the song.</h1>
-        <p class="lede">Create a private room, send the link to friends, and each person gets one looping instrument layer. New messages rewrite your layer, so the song keeps changing as the chat moves.</p>
+        <p class="eyebrow">CHATPOOL / TYPE JAM</p>
+        <h1>A tiny jam room where everyone’s typing becomes the song.</h1>
+        <p class="lede">Create a private room, send the link to friends, and each person gets one looping instrument layer. Every new message rewrites your sound, while every keystroke gives you an immediate preview.</p>
       </div>
       <div class="transport-card">
         <div class="status-row">
-          <span id="networkStatus" class="pill muted">network offline</span>
           <span id="audioStatus" class="pill muted">audio asleep</span>
-          <span id="roomStatus" class="pill">room: —</span>
           <span id="modeStatus" class="pill">not joined</span>
         </div>
         <button id="startAudioBtn" class="primary">Start audio</button>
@@ -30,39 +28,29 @@
           <button id="playBtn">Pause loop</button>
           <button id="clearMineBtn" disabled>Clear mine</button>
           <button id="resetRoomBtn" disabled>Reset room</button>
-          <button id="demoBtn" disabled>Add demo layer</button>
-        </div>
+          </div>
       </div>
     </section>
 
-    <section class="join-card" id="joinCard">
-      <label>
-        Display name
-        <input id="nameInput" maxlength="18" placeholder="xyxy" />
-      </label>
-      <label>
-        Room
-        <input id="roomInput" maxlength="24" value="toastie" />
-      </label>
-      <label>
-        Join as
-        <select id="roleSelect">
+    <section class="room-card" id="roomCard">
+      <div class="room-main">
+        <div>
+          <p class="room-kicker" id="roomKicker">Create or join a jam</p>
+          <strong id="inviteTitle">Chatpool</strong>
+          <p id="inviteCopy">Start a room, then copy the link and send it to friends.</p>
+        </div>
+        <label class="name-field">
+          Display name
+          <input id="nameInput" maxlength="18" placeholder="xyxy" />
+        </label>
+        <input id="roomInput" type="hidden" maxlength="24" value="jam" />
+        <select id="roleSelect" class="visually-hidden" aria-hidden="true" tabindex="-1">
           <option value="auto">auto by join order</option>
-          <option value="drums">drums</option>
-          <option value="bass">bass</option>
-          <option value="chords">chords</option>
-          <option value="melody">melody</option>
-          <option value="texture">texture</option>
         </select>
-      </label>
-      <button id="createRoomBtn">New room</button>
-      <button id="joinBtn" class="primary">Join room</button>
-    </section>
-
-    <section class="invite-card" id="inviteCard">
-      <div>
-        <strong id="inviteTitle">Invite friends</strong>
-        <p id="inviteCopy">Join a room first, then copy the link and send it around.</p>
+      </div>
+      <div class="room-actions">
+        <button id="joinBtn" class="primary">Join jam</button>
+        <button id="createRoomBtn">Create new room</button>
       </div>
       <div class="invite-actions">
         <input id="inviteLink" readonly value="" aria-label="Invite link" />
@@ -124,6 +112,6 @@
     </article>
   </template>
 
-  <script src="./app.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

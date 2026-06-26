@@ -22,9 +22,7 @@
 
   const $ = (sel) => document.querySelector(sel);
   const els = {
-    networkStatus: $('#networkStatus'),
     audioStatus: $('#audioStatus'),
-    roomStatus: $('#roomStatus'),
     modeStatus: $('#modeStatus'),
     startAudioBtn: $('#startAudioBtn'),
     tempo: $('#tempo'),
@@ -33,14 +31,13 @@
     playBtn: $('#playBtn'),
     clearMineBtn: $('#clearMineBtn'),
     resetRoomBtn: $('#resetRoomBtn'),
-    demoBtn: $('#demoBtn'),
-    joinCard: $('#joinCard'),
+    roomCard: $('#roomCard'),
+    roomKicker: $('#roomKicker'),
     nameInput: $('#nameInput'),
     roomInput: $('#roomInput'),
     roleSelect: $('#roleSelect'),
     createRoomBtn: $('#createRoomBtn'),
     joinBtn: $('#joinBtn'),
-    inviteCard: $('#inviteCard'),
     inviteTitle: $('#inviteTitle'),
     inviteCopy: $('#inviteCopy'),
     inviteLink: $('#inviteLink'),
@@ -95,7 +92,6 @@
   clearOldPersistedRoomState();
   els.nameInput.value = name;
   els.roomInput.value = roomId;
-  els.roomStatus.textContent = `room: ${roomId}`;
   buildTimeline();
   renderAll();
 
@@ -145,8 +141,6 @@
 
   els.clearMineBtn.addEventListener('click', () => send({ type: 'clear_mine' }));
   els.resetRoomBtn.addEventListener('click', () => send({ type: 'reset_room' }));
-  els.demoBtn.addEventListener('click', () => send({ type: 'demo' }));
-
   els.composer.addEventListener('keydown', async (e) => {
     if (!joined) return;
     await ensureAudio();
@@ -157,7 +151,9 @@
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (!captureStart) captureStart = performance.now();
-    typedEvents.push({ key: normaliseKey(e.key), t: performance.now() - captureStart });
+    const key = normaliseKey(e.key);
+    typedEvents.push({ key, t: performance.now() - captureStart });
+    playTypingPreview(key, typedEvents.length - 1);
     updateMeter();
   });
 
@@ -169,7 +165,9 @@
 
   if (new URL(location.href).pathname.startsWith('/r/')) {
     els.inviteLink.value = makeInviteLink(roomId);
-    els.inviteCopy.textContent = 'You opened an invite link. Pick a name and join the band.';
+    els.roomKicker.textContent = 'You were invited to a jam';
+    els.inviteCopy.textContent = 'Pick a name and join. No music skills required, only keyboard feelings.';
+    els.joinBtn.textContent = 'Join this jam';
   }
 
   function getInitialRoomId() {
@@ -177,7 +175,7 @@
     const pathMatch = url.pathname.match(/^\/r\/([a-z0-9-_]+)/i);
     const fromPath = pathMatch?.[1];
     const fromQuery = url.searchParams.get('room');
-    return safeSlug(fromPath || fromQuery || 'toastie');
+    return safeSlug(fromPath || fromQuery || 'jam');
   }
 
   function getOrMakeClientId() {
@@ -195,7 +193,7 @@
   }
 
   function randomName() {
-    const options = ['toast', 'melt', 'jam', 'snare', 'little ghost', 'room tone', 'bass crumb'];
+    const options = ['jam', 'pool', 'snare', 'little ghost', 'room tone', 'bass crumb', 'soft noise'];
     return `${options[Math.floor(Math.random() * options.length)]}-${Math.floor(Math.random() * 90 + 10)}`;
   }
 
@@ -209,11 +207,11 @@
       .replace(/[^a-z0-9-_]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'toastie';
+      .slice(0, 40) || 'jam';
   }
 
   function makeRoomSlug() {
-    const words = ['blue', 'melt', 'tiny', 'toast', 'jam', 'ghost', 'room', 'snare', 'soft', 'spark'];
+    const words = ['blue', 'tiny', 'jam', 'pool', 'ghost', 'room', 'snare', 'soft', 'spark', 'echo'];
     return `${words[Math.floor(Math.random() * words.length)]}-${words[Math.floor(Math.random() * words.length)]}-${Math.floor(Math.random() * 90 + 10)}`;
   }
 
@@ -228,12 +226,11 @@
   }
 
   async function joinRoom(nextRoom) {
-    roomId = safeSlug(nextRoom || 'toastie');
+    roomId = safeSlug(nextRoom || 'jam');
     name = safeText(els.nameInput.value, 28) || randomName();
     selectedRole = els.roleSelect.value || 'auto';
     localStorage.setItem('looproom.name', name);
     els.roomInput.value = roomId;
-    els.roomStatus.textContent = `room: ${roomId}`;
     els.inviteLink.value = makeInviteLink(roomId);
     history.replaceState(null, '', `/r/${roomId}`);
 
@@ -281,9 +278,8 @@
   }
 
   function setNetwork(label, live) {
-    els.networkStatus.textContent = label;
-    els.networkStatus.classList.toggle('live', live);
-    els.networkStatus.classList.toggle('muted', !live);
+    // Network status is kept internal for now; the public UI stays calmer for testing.
+    document.body.dataset.network = live ? 'live' : 'offline';
   }
 
   function send(payload) {
@@ -580,6 +576,39 @@
   function emptyLoop() {
     return Array.from({ length: STEPS }, () => []);
   }
+  function noteFromKey(key, index, role, sourceLength = 8, gap = 180) {
+    const code = key === 'Space' ? 32 : key.codePointAt(0) || index + 1;
+    const velocity = Math.max(0.32, Math.min(1, 0.92 - gap / 900 + (code % 5) * 0.035));
+    const note = {
+      key,
+      velocity,
+      accent: key === key.toUpperCase() && key.length === 1 && /[A-Z]/.test(key),
+      density: Math.min(12, Math.max(1, Math.round(sourceLength / 4))),
+      degree: code % 11
+    };
+    if (role === 'drums') {
+      note.drum = key === 'Space' ? 'kick' : index % 5 === 0 ? 'snare' : index % 3 === 0 ? 'kick' : 'hat';
+    } else if (role === 'bass') {
+      note.degree = (code + index) % 6;
+    } else if (role === 'chords') {
+      note.degree = (code + index) % 7;
+      note.quality = (code + sourceLength) % 3;
+    } else if (role === 'melody') {
+      note.degree = (code + index * 2) % 12;
+      note.octave = 4 + (code % 2);
+    } else {
+      note.texture = index % 4 === 0 || key === 'Backspace' ? 'click' : 'grain';
+      note.degree = (code + index) % 9;
+    }
+    return note;
+  }
+
+  function playTypingPreview(key, index) {
+    if (!audio || !master) return;
+    const role = your?.mode === 'player' ? your.role : 'texture';
+    const note = noteFromKey(key, index, role, Math.max(1, typedEvents.length), 120);
+    playNote(role, note, audio.currentTime + 0.004, Math.min(0.72, getMyServerVolume()) * 0.62);
+  }
 
   function eventsToLoop(events, text, role) {
     const loop = emptyLoop();
@@ -592,32 +621,9 @@
       const key = event.key || cleanText[i % cleanText.length] || '.';
       const rawStep = Math.round((event.t / phraseMs) * STEPS);
       const step = positiveModulo(rawStep, STEPS);
-      const code = key === 'Space' ? 32 : key.codePointAt(0) || cleanText.codePointAt(i % cleanText.length) || i + 1;
       const prev = source[i - 1];
       const gap = prev ? Math.max(20, event.t - prev.t) : 180;
-      const velocity = Math.max(0.32, Math.min(1, 0.92 - gap / 900 + (code % 5) * 0.035));
-      const note = {
-        key,
-        velocity,
-        accent: key === key.toUpperCase() && key.length === 1 && /[A-Z]/.test(key),
-        density: Math.min(12, Math.max(1, Math.round(source.length / 4))),
-        degree: code % 11
-      };
-      if (role === 'drums') {
-        note.drum = key === 'Space' ? 'kick' : i % 5 === 0 ? 'snare' : i % 3 === 0 ? 'kick' : 'hat';
-      } else if (role === 'bass') {
-        note.degree = (code + i) % 6;
-      } else if (role === 'chords') {
-        note.degree = (code + i) % 7;
-        note.quality = (code + source.length) % 3;
-      } else if (role === 'melody') {
-        note.degree = (code + i * 2) % 12;
-        note.octave = 4 + (code % 2);
-      } else {
-        note.texture = i % 4 === 0 || key === 'Backspace' ? 'click' : 'grain';
-        note.degree = (code + i) % 9;
-      }
-      loop[step].push(note);
+      loop[step].push(noteFromKey(key, i, role, source.length, gap));
     });
 
     // Keep extremely sparse phrases audible.
@@ -630,20 +636,18 @@
   function renderAll() {
     els.tempo.value = String(bpm);
     els.tempoLabel.textContent = String(bpm);
-    els.roomStatus.textContent = `room: ${roomId}`;
     els.inviteLink.value = makeInviteLink(roomId);
 
     const isHost = Boolean(your?.isHost);
     const playerCount = participants.filter(p => p.online && p.mode === 'player').length;
     const audienceCount = participants.filter(p => p.online && p.mode === 'audience').length;
 
-    els.joinBtn.textContent = joined ? 'Joined' : 'Join room';
+    els.joinBtn.textContent = joined ? 'Joined' : (new URL(location.href).pathname.startsWith('/r/') ? 'Join this jam' : 'Join jam');
     els.modeStatus.textContent = your ? `${your.mode}${your.isHost ? ' / host' : ''}` : 'not joined';
     els.modeStatus.classList.toggle('live', Boolean(your?.mode === 'player'));
     els.modeStatus.classList.toggle('muted', Boolean(your?.mode === 'audience'));
     els.clearMineBtn.disabled = !your || your.mode !== 'player';
     els.resetRoomBtn.disabled = !isHost;
-    els.demoBtn.disabled = !isHost;
     els.tempo.disabled = !isHost;
     els.tempoHint.textContent = isHost ? 'you control this' : 'host controls this';
     els.composer.disabled = !joined;
@@ -656,8 +660,11 @@
       ? 'Audience messages appear in chat but do not make a main layer yet.'
       : 'Each new message rewrites your current layer. Your fresh layer gets a short volume boost.';
 
-    els.inviteTitle.textContent = `${roomId}'s Looproom`;
-    els.inviteCopy.textContent = `${playerCount}/${maxPlayers} players live${audienceCount ? `, ${audienceCount} audience` : ''}. Copy the link and send it to friends.`;
+    els.inviteTitle.textContent = `${roomId}'s jam`;
+    els.roomKicker.textContent = joined ? 'You are in the room' : (new URL(location.href).pathname.startsWith('/r/') ? 'You were invited to a jam' : 'Create or join a jam');
+    els.inviteCopy.textContent = joined
+      ? `${playerCount}/${maxPlayers} players live${audienceCount ? `, ${audienceCount} audience` : ''}. Copy the link and send it to friends.`
+      : 'Create a new room or join this one. The first five people become the band.';
 
     renderMessages();
     renderParticipants();

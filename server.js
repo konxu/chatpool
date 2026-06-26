@@ -27,7 +27,7 @@ const MIME = {
 const rooms = new Map();
 const clients = new Set();
 
-function safeId(value, fallback = 'toastie') {
+function safeId(value, fallback = 'jam') {
   const clean = String(value || '').toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   return clean || fallback;
 }
@@ -136,7 +136,7 @@ function broadcastSnapshot(room) {
 }
 
 function joinRoom(client, payload) {
-  const roomId = safeId(payload.roomId, 'toastie');
+  const roomId = safeId(payload.roomId, 'jam');
   const room = getRoom(roomId);
 
   // One browser identity should only occupy one live socket at a time.
