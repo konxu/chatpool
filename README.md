@@ -1,28 +1,23 @@
-# chatjam MVP v7
+# chatjam — chat together, jam together
 
-**chat together, jam together**
+A real-time chatroom where everyone's typing becomes a shared jam.
 
-A real-time multiplayer chat prototype where everyone’s typing becomes a shared room mix.
+## What this version does
 
-This version is **chat-first**: the chat feed takes priority, layers are lightweight identity labels, and the music system stays mostly invisible. The room can record the local room mix and export a browser-generated clip.
-
-## What it does
-
-- Create or join a private jam room with a link like `/r/chatjam-42`.
-- Click the jam title to rename the room display name.
-- First 5 people become active layers: drums, bass, chords, melody, texture.
-- Extra people join as audience and are promoted automatically when a player leaves.
-- Every key gives an immediate sound preview.
-- Sending a message replaces your current loop with the rhythm you just typed.
-- The yellow capture bar shows the window that will be saved into your loop.
-- After the capture bar fills, typing still makes immediate sound, but no longer adds new events to the saved loop.
-- If someone leaves, their loop disappears immediately.
-- System messages are small and quiet so the chat stays central.
-- Record the **room mix** you hear locally and download it as a `.webm`/`.ogg` clip, depending on browser support.
+- Chat-first interface: messages stay central on desktop and mobile.
+- Editable jam title: click the title to rename the room.
+- Invite links: `/r/room-name` opens the same jam.
+- Up to 5 active player layers: drums, bass, chords, melody, texture.
+- Extra people join as audience and get promoted when a player leaves.
+- Each new message rewrites your current layer.
+- Starting a new phrase fades your old loop so your live typing is clearer.
+- The capture line is now a timed loop window: after it fills, typing still makes live sound but no longer adds more events to the loop.
+- Room recording captures the local room mix and shows Download clip only after a recording is finished.
 
 ## Run locally
 
 ```bash
+npm install
 npm start
 ```
 
@@ -32,7 +27,7 @@ Open:
 http://localhost:3000
 ```
 
-Or test a room path:
+Invite room example:
 
 ```text
 http://localhost:3000/r/chatjam-42
@@ -40,20 +35,18 @@ http://localhost:3000/r/chatjam-42
 
 ## Deploy
 
-This project needs a Node server because it uses WebSocket rooms.
+Use Render as a Node Web Service.
 
-On Render:
+Build command:
 
-```text
-Service type: Web Service
-Environment: Node
-Build Command: npm install
-Start Command: npm start
-Root Directory: leave empty if package.json is at repo root
+```bash
+npm install
 ```
 
-GitHub Pages alone will not work for the realtime version because it cannot run the Node WebSocket server.
+Start command:
 
-## Notes
+```bash
+npm start
+```
 
-Recording captures the Web Audio output generated in your browser. It does not record microphones or voices.
+GitHub Pages alone will not work for this version because the app needs a Node WebSocket server.

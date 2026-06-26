@@ -37,7 +37,9 @@ function safeText(value, max = 160) {
 }
 
 function titleFromId(id) {
-  return String(id || 'chatjam').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
+  const raw = String(id || 'chatjam');
+  if (raw === 'chatjam') return 'chatjam';
+  return raw.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
 }
 
 function safeTitle(value, fallback = 'chatjam') {

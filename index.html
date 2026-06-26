@@ -12,12 +12,14 @@
       <div class="room-header">
         <div class="title-block">
           <p class="eyebrow">chatjam</p>
-          <h1 id="inviteTitle" class="editable-title" contenteditable="true" spellcheck="false" aria-label="Jam name" title="Click to edit jam name">chatjam</h1>
+          <h1 class="headline" id="headline">
+            <span id="headlineLead"></span><span id="inviteTitle" class="editable-title" contenteditable="true" spellcheck="false" aria-label="Jam name" title="Click to edit jam name">chatjam</span><span id="headlineTail"></span>
+          </h1>
           <p id="inviteCopy" class="tagline">chat together, jam together</p>
-          <p class="room-kicker" id="roomKicker">Create or join a jam</p>
+          <p class="room-kicker" id="roomKicker"></p>
         </div>
         <div class="header-actions">
-          <button id="copyInviteBtn" class="secondary" disabled>Invite friends</button>
+          <button id="copyInviteBtn" class="secondary">Invite friends</button>
           <button id="recordRoomBtn" class="record-btn" disabled>● Rec</button>
           <a id="downloadClipLink" class="download-link" href="#" download="chatjam-room.webm" hidden>Download clip</a>
           <span id="recordStatus" class="record-status"></span>
@@ -56,12 +58,14 @@
       <section class="panel chat-panel">
         <div id="chatLog" class="chat-log" aria-live="polite"></div>
         <div class="composer-wrap">
-          <div id="recordingMeter" class="capture-meter" aria-hidden="true"><span></span></div>
           <div class="composer-line">
-            <input id="composer" class="composer" placeholder="Join, then type here…" disabled autocomplete="off" inputmode="text" />
+            <div class="input-stack">
+              <div id="recordingMeter" class="capture-meter" aria-hidden="true"><span></span></div>
+              <input id="composer" class="composer" placeholder="Join, then type here…" disabled autocomplete="off" inputmode="text" />
+            </div>
             <button id="commitBtn" class="primary" disabled>Send</button>
           </div>
-          <p class="microcopy" id="composerHelp">Type to play. Press Send to loop it.</p>
+          <p class="microcopy" id="composerHelp"></p>
         </div>
       </section>
 

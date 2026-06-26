@@ -34,6 +34,8 @@
     roomCard: $('#roomCard'),
     roomKicker: $('#roomKicker'),
     roomTitle: $('#inviteTitle'),
+    headlineLead: $('#headlineLead'),
+    headlineTail: $('#headlineTail'),
     nameInput: $('#nameInput'),
     roomInput: $('#roomInput'),
     roleSelect: $('#roleSelect'),
@@ -210,10 +212,8 @@
     if (socket && socket.readyState === WebSocket.OPEN) socket.close(1000, 'leaving');
   });
 
-  if (new URL(location.href).pathname.startsWith('/r/')) {
+  if (isInvitePath()) {
     els.inviteLink.value = makeInviteLink(roomId);
-    els.roomKicker.textContent = 'You were invited to join';
-    els.inviteCopy.textContent = 'chat together, jam together';
     els.joinBtn.textContent = 'Join this jam';
   }
 
@@ -226,7 +226,9 @@
   }
 
   function titleFromRoomId(id) {
-    return String(id || 'chatjam').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
+    const raw = String(id || 'chatjam');
+    if (raw === 'chatjam') return 'chatjam';
+    return raw.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
   }
 
   function getOrMakeClientId() {
@@ -268,6 +270,10 @@
 
   function makeInviteLink(id) {
     return `${location.origin}/r/${safeSlug(id)}`;
+  }
+
+  function isInvitePath() {
+    return new URL(location.href).pathname.startsWith('/r/');
   }
 
   function clearOldPersistedRoomState() {
@@ -911,18 +917,15 @@
     els.tempoHint.textContent = isHost ? 'you control this' : 'host controls this';
     els.composer.disabled = !joined;
     els.commitBtn.disabled = !joined;
-    els.copyInviteBtn.disabled = !joined;
+    els.copyInviteBtn.disabled = false;
     if (els.recordRoomBtn) els.recordRoomBtn.disabled = !joined || !window.MediaRecorder;
+    if (els.downloadClipLink && !lastClipUrl) els.downloadClipLink.hidden = true;
     els.composer.placeholder = your?.mode === 'audience'
       ? 'Band is full — chat here while you wait…'
       : your?.role
         ? `Type as ${ROLE_LABEL[your.role]}…`
         : 'Join, then type here…';
-    els.composerHelp.textContent = your?.mode === 'audience'
-      ? 'Audience. Your messages join the chat; you will get a layer when a spot opens.'
-      : your?.role
-        ? `${ROLE_LABEL[your.role]} · each message rewrites your layer`
-        : 'Type to play. Press Send to loop it.';
+    els.composerHelp.textContent = '';
 
     document.querySelector('.top-copy')?.classList.toggle('joined', joined);
     document.body.dataset.joined = joined ? 'true' : 'false';
@@ -930,10 +933,14 @@
     if (document.activeElement !== els.roomTitle) {
       els.roomTitle.textContent = roomTitle || titleFromRoomId(roomId);
     }
+    const invited = isInvitePath() && !joined;
+    if (els.headlineLead) els.headlineLead.textContent = invited ? 'You were invited to join “' : '';
+    if (els.headlineTail) els.headlineTail.textContent = invited ? '”' : '';
     els.inviteCopy.textContent = 'chat together, jam together';
+    const roleNote = your?.mode === 'player' && your?.role ? ` · You are ${ROLE_LABEL[your.role]}` : your?.mode === 'audience' ? ' · You are in the audience' : '';
     els.roomKicker.textContent = joined
-      ? `${playerCount}/${maxPlayers} players live${audienceCount ? ` · ${audienceCount} audience` : ''}`
-      : (new URL(location.href).pathname.startsWith('/r/') ? 'You were invited to join' : 'Create a room, send the link, and chat.');
+      ? `${playerCount}/${maxPlayers} live${audienceCount ? ` · ${audienceCount} audience` : ''}${roleNote}`
+      : '';
 
     renderMessages();
     renderParticipants();
@@ -947,7 +954,7 @@
     if (!messages.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'No one has typed yet. Join, type anything, and press Send to make the first loop.';
+      empty.textContent = 'No messages yet. Type anything to start the jam.';
       els.chatLog.appendChild(empty);
       return;
     }
