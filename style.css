@@ -88,3 +88,103 @@ label{display:grid;gap:.32rem;color:var(--muted);font-size:.75rem}
 @media (max-width:390px){
   .join-strip{grid-template-columns:1fr 1fr}.join-strip .name-field{grid-column:1 / -1}.join-strip button{width:100%}.headline{font-size:1rem}.header-actions button,.download-link{padding:.52rem .62rem}
 }
+
+
+/* v9: once joined, collapse the hero into a compact chat header. */
+body[data-joined="true"] .top-card{
+  padding:8px 10px;
+  gap:5px;
+  border-radius:16px;
+}
+body[data-joined="true"] .room-header{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+}
+body[data-joined="true"] .title-block{gap:1px;min-width:0}
+body[data-joined="true"] .eyebrow{
+  font-size:.56rem;
+  letter-spacing:.16em;
+  line-height:1;
+}
+body[data-joined="true"] .headline{
+  font-size:1.08rem;
+  line-height:1.15;
+  letter-spacing:-.015em;
+  font-weight:860;
+  max-width:100%;
+}
+body[data-joined="true"] .headline #headlineLead,
+body[data-joined="true"] .headline #headlineTail{display:none}
+body[data-joined="true"] .tagline{display:none!important}
+body[data-joined="true"] .room-kicker{
+  min-height:0;
+  font-size:.7rem;
+  color:var(--muted);
+  line-height:1.18;
+}
+body[data-joined="true"] .header-actions{
+  min-width:0;
+  gap:5px;
+  flex-wrap:nowrap;
+}
+body[data-joined="true"] .header-actions button,
+body[data-joined="true"] .download-link{
+  padding:.5rem .7rem;
+  font-size:.72rem;
+}
+body[data-joined="true"] .record-status{
+  font-size:.68rem;
+  min-width:30px;
+}
+body[data-joined="true"] .live-strip{
+  min-height:0;
+  display:block;
+}
+body[data-joined="true"] .participants{
+  gap:4px;
+  flex-wrap:nowrap;
+  overflow:auto;
+  padding:0;
+}
+body[data-joined="true"] .participant-pill{
+  font-size:.64rem;
+  padding:.16rem .42rem;
+  background:rgba(16,15,12,.42);
+  border-color:rgba(56,50,37,.75);
+  color:var(--muted);
+  font-weight:650;
+}
+body[data-joined="true"] .participant-pill.is-me{
+  background:rgba(245,201,93,.12);
+  border-color:rgba(245,201,93,.28);
+  color:var(--accent-2);
+  font-weight:750;
+}
+body[data-joined="true"] .composer-wrap{
+  padding-top:7px;
+}
+body[data-joined="true"] .composer{
+  border-radius:999px;
+  padding:.82rem .95rem .78rem;
+}
+body[data-joined="true"] .capture-meter{
+  left:16px;
+  right:16px;
+  top:4px;
+}
+@media (max-width:760px){
+  body[data-joined="true"] .top-card{padding:7px 9px;gap:4px}
+  body[data-joined="true"] .headline{font-size:1rem}
+  body[data-joined="true"] .room-kicker{font-size:.66rem}
+  body[data-joined="true"] .header-actions button,
+  body[data-joined="true"] .download-link{padding:.48rem .6rem;font-size:.68rem}
+  body[data-joined="true"] .record-status{display:none}
+}
+@media (max-width:420px){
+  body[data-joined="true"] .room-header{grid-template-columns:minmax(0,1fr) auto;gap:6px}
+  body[data-joined="true"] .headline{font-size:.94rem}
+  body[data-joined="true"] .eyebrow{font-size:.52rem}
+  body[data-joined="true"] .copyInviteBtn{max-width:80px}
+}

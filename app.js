@@ -996,13 +996,11 @@
     }
 
     els.participants.innerHTML = '';
-    if (!online.length) {
-      const pill = document.createElement('span');
-      pill.className = 'participant-pill empty';
-      pill.textContent = 'No one here yet';
-      els.participants.appendChild(pill);
-      return;
-    }
+    const strip = els.participants.closest('.live-strip');
+    const shouldShowPeople = online.length > 1;
+    if (strip) strip.hidden = !shouldShowPeople;
+    if (!shouldShowPeople) return;
+
     const me = online.find(p => p.clientId === clientId);
     const ordered = me ? [me, ...online.filter(p => p.clientId !== clientId)] : online;
     ordered.slice(0, 7).forEach((p) => {

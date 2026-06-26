@@ -50,3 +50,8 @@ npm start
 ```
 
 GitHub Pages alone will not work for this version because the app needs a Node WebSocket server.
+
+
+## v9 update
+
+Joined rooms now collapse into a compact chat header instead of returning to the large hero layout. The participant strip only appears when there is more than one person in the room.
