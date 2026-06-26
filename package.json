@@ -1,8 +1,8 @@
 {
   "name": "chatjam",
-  "version": "8.0.0",
+  "version": "11.0.0",
   "private": true,
-  "description": "A real-time multiplayer chatroom where everyone’s typing becomes a shared jam.",
+  "description": "A real-time multiplayer chatroom where everyone\u2019s typing becomes a shared jam.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -38,11 +38,11 @@ function safeText(value, max = 160) {
 
 function titleFromId(id) {
   const raw = String(id || 'chatjam');
-  if (raw === 'chatjam') return 'chatjam';
-  return raw.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
+  if (raw === 'chatjam') return 'Chatjam';
+  return raw.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'Chatjam';
 }
 
-function safeTitle(value, fallback = 'chatjam') {
+function safeTitle(value, fallback = 'Chatjam') {
   return safeText(value || fallback, 48) || fallback;
 }
 
@@ -112,7 +112,7 @@ function promoteWaitingAudience(room) {
       rawCount: 0,
       isTyping: false
     });
-    pushMessage(room, { name: 'room', role: 'system', text: `${next.name} joined as ${role}` });
+    pushMessage(room, { name: 'room', role: 'system', text: `${next.name} joined as ${titleFromId(role)}` });
   }
 }
 
@@ -244,7 +244,7 @@ function joinRoom(client, payload) {
   }
 
   const joinText = assignment.mode === 'player'
-    ? `${client.name} joined as ${assignment.role}`
+    ? `${client.name} joined as ${titleFromId(assignment.role)}`
     : `${client.name} joined audience`;
   pushMessage(room, { name: 'room', role: 'system', text: joinText, at: now });
   broadcastSnapshot(room);

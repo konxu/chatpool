@@ -1,9 +1,13 @@
-# chatjam — chat together, jam together
+# Chatjam — Chat together, jam together
 
 A real-time chatroom where everyone's typing becomes a shared jam.
 
 ## What this version does
 
+- Clear Home, Invite, and Joined-room states.
+- The Chatjam wordmark links back to Home.
+- Home explains the flow with three steps: Pick a name, Send the link, Type together.
+- Invite links show “You were invited to join …” as the main headline.
 - Chat-first interface: messages stay central on desktop and mobile.
 - Editable jam title: click the title to rename the room.
 - Invite links: `/r/room-name` opens the same jam.
@@ -52,6 +56,6 @@ npm start
 GitHub Pages alone will not work for this version because the app needs a Node WebSocket server.
 
 
-## v9 update
+## v11 update
 
-Joined rooms now collapse into a compact chat header instead of returning to the large hero layout. The participant strip only appears when there is more than one person in the room.
+Home, invite, and joined-room states now use separate layouts, so joining no longer returns to the old large hero. The visible language has been capitalized and simplified across the app.
