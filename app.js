@@ -19,6 +19,7 @@
   };
   const DEFAULT_VOLUME = 0.78;
   const FRESH_BOOST_SECONDS = 8;
+  const CAPTURE_WINDOW_MS = 8000;
 
   const $ = (sel) => document.querySelector(sel);
   const els = {
@@ -32,6 +33,7 @@
     resetRoomBtn: $('#resetRoomBtn'),
     roomCard: $('#roomCard'),
     roomKicker: $('#roomKicker'),
+    roomTitle: $('#inviteTitle'),
     nameInput: $('#nameInput'),
     roomInput: $('#roomInput'),
     roleSelect: $('#roleSelect'),
@@ -80,8 +82,9 @@
 
   let joined = false;
   let clientId = getOrMakeClientId();
-  let name = localStorage.getItem('looproom.name') || randomName();
+  let name = localStorage.getItem('chatjam.name') || randomName();
   let roomId = getInitialRoomId();
+  let roomTitle = titleFromRoomId(roomId);
   let selectedRole = 'auto';
   let your = null;
   let bpm = 96;
@@ -101,10 +104,12 @@
   let lastPhysicalKeyAt = 0;
   let typingStateTimer = null;
   let scheduledPhraseKeys = new Set();
+  let meterTimer = null;
 
   clearOldPersistedRoomState();
   els.nameInput.value = name;
   els.roomInput.value = roomId;
+  els.roomTitle.textContent = roomTitle;
   buildTimeline();
   renderAll();
 
@@ -122,6 +127,8 @@
 
   els.createRoomBtn.addEventListener('click', async () => {
     const next = makeRoomSlug();
+    roomTitle = titleFromRoomId(next);
+    els.roomTitle.textContent = roomTitle;
     els.roomInput.value = next;
     await joinRoom(next);
   });
@@ -130,12 +137,21 @@
     await joinRoom(els.roomInput.value);
   });
 
+  els.roomTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      els.roomTitle.blur();
+    }
+  });
+
+  els.roomTitle.addEventListener('blur', () => commitRoomTitle());
+
   els.copyInviteBtn.addEventListener('click', async () => {
     const link = els.inviteLink.value || makeInviteLink(roomId);
     try {
       await navigator.clipboard.writeText(link);
-      els.copyInviteBtn.textContent = 'Copied';
-      window.setTimeout(() => (els.copyInviteBtn.textContent = 'Copy link'), 1200);
+      els.copyInviteBtn.textContent = 'Link copied';
+      window.setTimeout(() => (els.copyInviteBtn.textContent = 'Invite friends'), 1200);
     } catch {
       els.inviteLink.focus();
       els.inviteLink.select();
@@ -196,8 +212,8 @@
 
   if (new URL(location.href).pathname.startsWith('/r/')) {
     els.inviteLink.value = makeInviteLink(roomId);
-    els.roomKicker.textContent = 'You were invited to a jam';
-    els.inviteCopy.textContent = 'Pick a name and join. No music skills required, only keyboard feelings.';
+    els.roomKicker.textContent = 'You were invited to join';
+    els.inviteCopy.textContent = 'chat together, jam together';
     els.joinBtn.textContent = 'Join this jam';
   }
 
@@ -206,11 +222,15 @@
     const pathMatch = url.pathname.match(/^\/r\/([a-z0-9-_]+)/i);
     const fromPath = pathMatch?.[1];
     const fromQuery = url.searchParams.get('room');
-    return safeSlug(fromPath || fromQuery || 'jam');
+    return safeSlug(fromPath || fromQuery || 'chatjam');
+  }
+
+  function titleFromRoomId(id) {
+    return String(id || 'chatjam').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
   }
 
   function getOrMakeClientId() {
-    const key = 'looproom.clientId';
+    const key = 'chatjam.clientId';
     let id = sessionStorage.getItem(key);
     if (!id) {
       id = crypto.randomUUID ? crypto.randomUUID() : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -238,12 +258,12 @@
       .replace(/[^a-z0-9-_]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'jam';
+      .slice(0, 40) || 'chatjam';
   }
 
   function makeRoomSlug() {
-    const words = ['blue', 'tiny', 'jam', 'pool', 'ghost', 'room', 'snare', 'soft', 'spark', 'echo'];
-    return `${words[Math.floor(Math.random() * words.length)]}-${words[Math.floor(Math.random() * words.length)]}-${Math.floor(Math.random() * 90 + 10)}`;
+    const words = ['chatjam', 'tea-room', 'soft-noise', 'little-jam', 'after-hours', 'typing-pool', 'echo-room', 'spark-room'];
+    return `${words[Math.floor(Math.random() * words.length)]}-${Math.floor(Math.random() * 90 + 10)}`;
   }
 
   function makeInviteLink(id) {
@@ -252,15 +272,16 @@
 
   function clearOldPersistedRoomState() {
     Object.keys(localStorage).forEach((key) => {
-      if (/^looproom\..*\.(state|roleCursor|tracks|messages)$/.test(key)) localStorage.removeItem(key);
+      if (/^(looproom|chatjam)\..*\.(state|roleCursor|tracks|messages)$/.test(key)) localStorage.removeItem(key);
     });
   }
 
   async function joinRoom(nextRoom) {
-    roomId = safeSlug(nextRoom || 'jam');
+    roomId = safeSlug(nextRoom || 'chatjam');
+    commitRoomTitle(false);
     name = safeText(els.nameInput.value, 28) || randomName();
     selectedRole = els.roleSelect.value || 'auto';
-    localStorage.setItem('looproom.name', name);
+    localStorage.setItem('chatjam.name', name);
     els.roomInput.value = roomId;
     els.inviteLink.value = makeInviteLink(roomId);
     history.replaceState(null, '', `/r/${roomId}`);
@@ -285,7 +306,7 @@
     socket.addEventListener('open', () => {
       reconnectAttempts = 0;
       setNetwork('network live', true);
-      send({ type: 'join', roomId, clientId, name, requestedRole: selectedRole });
+      send({ type: 'join', roomId, clientId, name, requestedRole: selectedRole, roomTitle });
     });
 
     socket.addEventListener('message', (event) => {
@@ -323,6 +344,7 @@
   function applySnapshot(snapshot) {
     clockOffset = Number(snapshot.serverNow || Date.now()) - Date.now();
     roomId = safeSlug(snapshot.roomId || roomId);
+    roomTitle = safeText(snapshot.roomTitle || roomTitle || titleFromRoomId(roomId), 48);
     bpm = Number(snapshot.bpm || bpm);
     roomStartedAt = Number(snapshot.roomStartedAt || roomStartedAt);
     hostId = snapshot.hostId || null;
@@ -629,7 +651,7 @@
       const ext = type.includes('ogg') ? 'ogg' : 'webm';
       lastClipUrl = URL.createObjectURL(blob);
       els.downloadClipLink.href = lastClipUrl;
-      els.downloadClipLink.download = `chatpool-${roomId}-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+      els.downloadClipLink.download = `chatjam-${roomId}-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
       els.downloadClipLink.hidden = false;
       setRecordStatus('clip ready');
       updateRecordButton(false);
@@ -656,7 +678,7 @@
 
   function updateRecordButton(recording) {
     if (!els.recordRoomBtn) return;
-    els.recordRoomBtn.textContent = recording ? '■ Stop' : '● Rec room';
+    els.recordRoomBtn.textContent = recording ? '■ Stop' : '● Rec';
     els.recordRoomBtn.classList.toggle('recording', recording);
   }
 
@@ -690,11 +712,17 @@
 
   function captureKeyEvent(key) {
     if (!joined) return;
-    if (!captureStart) captureStart = performance.now();
-    sendTypingState(true);
     const now = performance.now();
-    typedEvents.push({ key, t: now - captureStart });
-    playTypingPreview(key, typedEvents.length - 1);
+    if (!captureStart) {
+      captureStart = now;
+      startMeterTimer();
+    }
+    sendTypingState(true);
+    const elapsed = now - captureStart;
+    const shouldCapture = elapsed <= CAPTURE_WINDOW_MS || typedEvents.length === 0;
+    const previewIndex = shouldCapture ? typedEvents.length : Math.max(0, typedEvents.length - 1);
+    if (shouldCapture) typedEvents.push({ key, t: elapsed });
+    playTypingPreview(key, previewIndex);
     updateMeter();
   }
 
@@ -740,12 +768,25 @@
     typedEvents = [];
     captureStart = 0;
     isTypingNewPhrase = false;
+    stopMeterTimer();
     updateMeter();
   }
 
+  function startMeterTimer() {
+    if (meterTimer) return;
+    meterTimer = window.setInterval(updateMeter, 60);
+  }
+
+  function stopMeterTimer() {
+    clearInterval(meterTimer);
+    meterTimer = null;
+    els.meter?.parentElement?.classList.remove('is-complete');
+  }
+
   function updateMeter() {
-    const density = Math.min(1, (typedEvents.length || els.composer.value.length) / 42);
-    els.meter.style.width = `${density * 100}%`;
+    const progress = captureStart ? Math.min(1, Math.max(0, (performance.now() - captureStart) / CAPTURE_WINDOW_MS)) : 0;
+    if (els.meter) els.meter.style.width = `${progress * 100}%`;
+    els.meter?.parentElement?.classList.toggle('is-complete', progress >= 1);
   }
 
   function getMyServerVolume() {
@@ -838,6 +879,21 @@
     return loop;
   }
 
+
+  function commitRoomTitle(announce = true) {
+    const title = safeText(els.roomTitle.textContent, 48) || 'chatjam';
+    roomTitle = title;
+    if (document.activeElement !== els.roomTitle) els.roomTitle.textContent = roomTitle;
+    if (!joined) {
+      roomId = safeSlug(title);
+      els.roomInput.value = roomId;
+      els.inviteLink.value = makeInviteLink(roomId);
+      history.replaceState(null, '', location.pathname.startsWith('/r/') ? `/r/${roomId}` : location.pathname);
+      return;
+    }
+    if (announce) send({ type: 'rename_room', title: roomTitle });
+  }
+
   function renderAll() {
     els.tempo.value = String(bpm);
     els.tempoLabel.textContent = String(bpm);
@@ -847,7 +903,7 @@
     const playerCount = participants.filter(p => p.online && p.mode === 'player').length;
     const audienceCount = participants.filter(p => p.online && p.mode === 'audience').length;
 
-    els.joinBtn.textContent = joined ? 'Joined' : (new URL(location.href).pathname.startsWith('/r/') ? 'Join this jam' : 'Join jam');
+    els.joinBtn.textContent = joined ? 'Joined' : 'Join this jam';
     if (els.modeStatus) els.modeStatus.textContent = your ? `${your.mode}${your.isHost ? ' / host' : ''}` : 'not joined';
     els.clearMineBtn.disabled = !your || your.mode !== 'player';
     els.resetRoomBtn.disabled = !isHost;
@@ -855,6 +911,7 @@
     els.tempoHint.textContent = isHost ? 'you control this' : 'host controls this';
     els.composer.disabled = !joined;
     els.commitBtn.disabled = !joined;
+    els.copyInviteBtn.disabled = !joined;
     if (els.recordRoomBtn) els.recordRoomBtn.disabled = !joined || !window.MediaRecorder;
     els.composer.placeholder = your?.mode === 'audience'
       ? 'Band is full — chat here while you wait…'
@@ -862,21 +919,21 @@
         ? `Type as ${ROLE_LABEL[your.role]}…`
         : 'Join, then type here…';
     els.composerHelp.textContent = your?.mode === 'audience'
-      ? 'You are in the audience. Your messages join the chat; you will get a layer when a spot opens.'
+      ? 'Audience. Your messages join the chat; you will get a layer when a spot opens.'
       : your?.role
-        ? `You are ${ROLE_LABEL[your.role]}. Each message rewrites your layer.`
-        : 'Chat first. Your typing becomes your layer.';
+        ? `${ROLE_LABEL[your.role]} · each message rewrites your layer`
+        : 'Type to play. Press Send to loop it.';
 
     document.querySelector('.top-copy')?.classList.toggle('joined', joined);
-    els.inviteTitle.textContent = joined
-      ? `${roomId} · ${your?.mode === 'player' ? `you are ${ROLE_LABEL[your.role]}` : your?.mode === 'audience' ? 'you are audience' : 'live jam'}`
-      : (new URL(location.href).pathname.startsWith('/r/') ? `You were invited to ${roomId}.` : 'Start a typing jam.');
+    document.body.dataset.joined = joined ? 'true' : 'false';
+
+    if (document.activeElement !== els.roomTitle) {
+      els.roomTitle.textContent = roomTitle || titleFromRoomId(roomId);
+    }
+    els.inviteCopy.textContent = 'chat together, jam together';
     els.roomKicker.textContent = joined
       ? `${playerCount}/${maxPlayers} players live${audienceCount ? ` · ${audienceCount} audience` : ''}`
-      : (new URL(location.href).pathname.startsWith('/r/') ? 'Pick a name and join the chat' : 'Create a room, send the link, and chat.');
-    els.inviteCopy.textContent = joined
-      ? 'Chat normally. The room turns everyone’s typing into the mix.'
-      : 'First five people become drums, bass, chords, melody, and texture.';
+      : (new URL(location.href).pathname.startsWith('/r/') ? 'You were invited to join' : 'Create a room, send the link, and chat.');
 
     renderMessages();
     renderParticipants();
@@ -890,7 +947,7 @@
     if (!messages.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'No one has typed yet. Join the room, type anything, and press Enter to make the first loop.';
+      empty.textContent = 'No one has typed yet. Join, type anything, and press Send to make the first loop.';
       els.chatLog.appendChild(empty);
       return;
     }

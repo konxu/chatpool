@@ -3,17 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chatpool — Type Jam Room</title>
+  <title>chatjam — chat together, jam together</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <main class="app-shell">
     <section class="top-card" id="roomCard">
-      <div class="top-copy">
-        <p class="eyebrow">CHATPOOL</p>
-        <h1 id="inviteTitle">A group chat that turns typing into a song.</h1>
-        <p id="inviteCopy">Create a jam, invite friends, and just chat. The room will handle the music.</p>
-        <p class="room-kicker" id="roomKicker">Create or join a jam</p>
+      <div class="room-header">
+        <div class="title-block">
+          <p class="eyebrow">chatjam</p>
+          <h1 id="inviteTitle" class="editable-title" contenteditable="true" spellcheck="false" aria-label="Jam name" title="Click to edit jam name">chatjam</h1>
+          <p id="inviteCopy" class="tagline">chat together, jam together</p>
+          <p class="room-kicker" id="roomKicker">Create or join a jam</p>
+        </div>
+        <div class="header-actions">
+          <button id="copyInviteBtn" class="secondary" disabled>Invite friends</button>
+          <button id="recordRoomBtn" class="record-btn" disabled>● Rec</button>
+          <a id="downloadClipLink" class="download-link" href="#" download="chatjam-room.webm" hidden>Download clip</a>
+          <span id="recordStatus" class="record-status"></span>
+        </div>
       </div>
 
       <div class="join-strip">
@@ -25,16 +33,13 @@
         <select id="roleSelect" class="visually-hidden" aria-hidden="true" tabindex="-1">
           <option value="auto">auto by join order</option>
         </select>
-        <button id="joinBtn" class="primary">Join jam</button>
-        <button id="createRoomBtn">New jam</button>
+        <button id="joinBtn" class="primary">Join this jam</button>
+        <button id="createRoomBtn" class="secondary">New jam</button>
       </div>
 
       <div class="live-strip">
         <div id="participants" class="participants" aria-label="People in room"></div>
-        <div class="invite-actions">
-          <input id="inviteLink" readonly value="" aria-label="Invite link" />
-          <button id="copyInviteBtn">Copy link</button>
-        </div>
+        <input id="inviteLink" class="visually-hidden" readonly value="" aria-label="Invite link" />
       </div>
 
       <div class="hidden-controls" aria-hidden="true">
@@ -51,23 +56,16 @@
       <section class="panel chat-panel">
         <div id="chatLog" class="chat-log" aria-live="polite"></div>
         <div class="composer-wrap">
-          <div id="recordingMeter" class="recording-meter"><span></span></div>
+          <div id="recordingMeter" class="capture-meter" aria-hidden="true"><span></span></div>
           <div class="composer-line">
             <input id="composer" class="composer" placeholder="Join, then type here…" disabled autocomplete="off" inputmode="text" />
             <button id="commitBtn" class="primary" disabled>Send</button>
           </div>
-          <div class="bottom-tools">
-            <p class="microcopy" id="composerHelp">Chat first. Your typing becomes your layer.</p>
-            <div class="record-controls">
-              <button id="recordRoomBtn" disabled>● Rec room</button>
-              <a id="downloadClipLink" class="download-link" href="#" download="chatpool-room.webm" hidden>Download clip</a>
-              <span id="recordStatus" class="record-status"></span>
-            </div>
-          </div>
+          <p class="microcopy" id="composerHelp">Type to play. Press Send to loop it.</p>
         </div>
       </section>
 
-      <aside class="panel layer-panel">
+      <aside class="panel layer-panel" aria-hidden="true">
         <div class="panel-head">
           <h2>Layers</h2>
           <span id="stepReadout" class="hint">live</span>

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: looproom
+    name: chatjam
     env: node
     buildCommand: npm install
     startCommand: npm start

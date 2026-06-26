@@ -27,13 +27,21 @@ const MIME = {
 const rooms = new Map();
 const clients = new Set();
 
-function safeId(value, fallback = 'jam') {
+function safeId(value, fallback = 'chatjam') {
   const clean = String(value || '').toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   return clean || fallback;
 }
 
 function safeText(value, max = 160) {
   return String(value || '').replace(/[<>]/g, '').trim().slice(0, max);
+}
+
+function titleFromId(id) {
+  return String(id || 'chatjam').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 48) || 'chatjam';
+}
+
+function safeTitle(value, fallback = 'chatjam') {
+  return safeText(value || fallback, 48) || fallback;
 }
 
 function uid(prefix = 'm') {
@@ -49,6 +57,7 @@ function getRoom(roomId) {
   if (!rooms.has(id)) {
     rooms.set(id, {
       roomId: id,
+      title: titleFromId(id),
       createdAt: Date.now(),
       startedAt: Date.now(),
       bpm: 96,
@@ -151,6 +160,7 @@ function roomSnapshot(room, client) {
     type: 'snapshot',
     serverNow: Date.now(),
     roomId: room.roomId,
+    roomTitle: room.title || titleFromId(room.roomId),
     roomStartedAt: room.startedAt,
     bpm: room.bpm,
     maxPlayers: MAX_PLAYERS,
@@ -169,8 +179,11 @@ function broadcastSnapshot(room) {
 }
 
 function joinRoom(client, payload) {
-  const roomId = safeId(payload.roomId, 'jam');
+  const roomId = safeId(payload.roomId, 'chatjam');
   const room = getRoom(roomId);
+  if (payload.roomTitle && (!room.title || room.title === titleFromId(roomId))) {
+    room.title = safeTitle(payload.roomTitle, titleFromId(roomId));
+  }
 
   // One browser identity should only occupy one live socket at a time.
   for (const other of Array.from(room.clients)) {
@@ -420,6 +433,15 @@ function addDemo(client) {
   broadcastSnapshot(room);
 }
 
+function renameRoom(client, payload) {
+  const room = rooms.get(client.roomId);
+  if (!room) return;
+  const title = safeTitle(payload.title, titleFromId(room.roomId));
+  if (!title || title === room.title) return;
+  room.title = title;
+  broadcastSnapshot(room);
+}
+
 function handleMessage(client, raw) {
   let payload;
   try { payload = JSON.parse(raw); }
@@ -431,6 +453,7 @@ function handleMessage(client, raw) {
   if (payload.type === 'chat') return handlePhrase(client, payload);
   if (payload.type === 'clear_mine') return clearMine(client);
   if (payload.type === 'typing_state') return updateTypingState(client, payload);
+  if (payload.type === 'rename_room') return renameRoom(client, payload);
   if (payload.type === 'volume') return updateVolume(client, payload);
   if (payload.type === 'tempo') return updateTempo(client, payload);
   if (payload.type === 'reset_room') return resetRoom(client);
@@ -581,5 +604,5 @@ function sendFrame(socket, payload, opcode = 0x1) {
 }
 
 server.listen(PORT, () => {
-  console.log(`Looproom running on http://localhost:${PORT}`);
+  console.log(`chatjam running on http://localhost:${PORT}`);
 });
