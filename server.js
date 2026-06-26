@@ -100,7 +100,7 @@ function promoteWaitingAudience(room) {
       rawCount: 0,
       isTyping: false
     });
-    pushMessage(room, { name: 'room', role: 'system', text: `${next.name} moved from audience to ${role}.` });
+    pushMessage(room, { name: 'room', role: 'system', text: `${next.name} joined as ${role}` });
   }
 }
 
@@ -224,8 +224,8 @@ function joinRoom(client, payload) {
   }
 
   const joinText = assignment.mode === 'player'
-    ? `${client.name} joined as ${assignment.role}.`
-    : `${client.name} joined as audience. The band is full.`;
+    ? `${client.name} joined as ${assignment.role}`
+    : `${client.name} joined audience`;
   pushMessage(room, { name: 'room', role: 'system', text: joinText, at: now });
   broadcastSnapshot(room);
 }
@@ -323,7 +323,7 @@ function clearMine(client) {
     track.text = '';
     track.isTyping = false;
     track.updatedAt = Date.now();
-    pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} cleared their loop.` });
+    pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} cleared their loop` });
     broadcastSnapshot(room);
   }
 }
@@ -358,7 +358,7 @@ function updateTempo(client, payload) {
   const bpm = Number(payload.bpm);
   if (Number.isFinite(bpm)) {
     room.bpm = Math.max(60, Math.min(150, Math.round(bpm)));
-    pushMessage(room, { name: 'room', role: 'system', text: `Tempo changed to ${room.bpm} BPM.` });
+    pushMessage(room, { name: 'room', role: 'system', text: `tempo ${room.bpm} BPM` });
     broadcastSnapshot(room);
   }
 }
@@ -376,7 +376,7 @@ function resetRoom(client) {
     track.isTyping = false;
     track.updatedAt = Date.now();
   }
-  pushMessage(room, { name: 'room', role: 'system', text: `${client.name || 'Host'} reset the room.` });
+  pushMessage(room, { name: 'room', role: 'system', text: `${client.name || 'host'} reset the room` });
   broadcastSnapshot(room);
 }
 
@@ -416,7 +416,7 @@ function addDemo(client) {
     rawCount: demo.text.length,
     isDemo: true
   });
-  pushMessage(room, { name: 'room', role: 'system', text: `A demo ${role} layer joined.` });
+  pushMessage(room, { name: 'room', role: 'system', text: `demo ${role} joined` });
   broadcastSnapshot(room);
 }
 
@@ -453,7 +453,7 @@ function removeClient(client) {
     participant.online = false;
     participant.lastSeen = Date.now();
     room.tracks.delete(client.clientId);
-    pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} left. Their ${oldRole === 'audience' ? 'spot' : 'loop'} disappeared.` });
+    pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} left` });
     if (oldMode === 'player') promoteWaitingAudience(room);
   }
   ensureHost(room);

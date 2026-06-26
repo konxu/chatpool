@@ -51,6 +51,9 @@
     timeline: $('#timeline'),
     stepReadout: $('#stepReadout'),
     meter: $('#recordingMeter span'),
+    recordRoomBtn: $('#recordRoomBtn'),
+    downloadClipLink: $('#downloadClipLink'),
+    recordStatus: $('#recordStatus'),
     messageTemplate: $('#messageTemplate'),
     trackTemplate: $('#trackTemplate')
   };
@@ -62,6 +65,12 @@
 
   let audio = null;
   let master = null;
+  let recordDest = null;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordingStartedAt = 0;
+  let recordingTimer = null;
+  let lastClipUrl = '';
   let noiseBuffer = null;
   let schedulerTimer = null;
   let isPlaying = true;
@@ -141,6 +150,10 @@
   els.commitBtn.addEventListener('click', async () => {
     await ensureAudio();
     commitPhrase();
+  });
+  els.recordRoomBtn?.addEventListener('click', async () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') stopRoomRecording();
+    else await startRoomRecording();
   });
   els.composer.addEventListener('keydown', async (e) => {
     if (!joined) return;
@@ -329,12 +342,14 @@
       master = audio.createGain();
       master.gain.value = 0.68;
       master.connect(audio.destination);
+      if (audio.createMediaStreamDestination) {
+        recordDest = audio.createMediaStreamDestination();
+        master.connect(recordDest);
+      }
       noiseBuffer = createNoiseBuffer(audio);
     }
     if (audio.state !== 'running') await audio.resume();
-    els.audioStatus.textContent = 'audio live';
-    els.audioStatus.classList.remove('muted');
-    els.audioStatus.classList.add('live');
+    if (els.audioStatus) els.audioStatus.textContent = 'audio live';
     if (!schedulerTimer) startScheduler();
   }
 
@@ -586,6 +601,81 @@
     source.stop(time + duration + 0.03);
   }
 
+
+  async function startRoomRecording() {
+    await ensureAudio();
+    if (!recordDest || typeof MediaRecorder === 'undefined') {
+      setRecordStatus('recording not supported');
+      return;
+    }
+    if (mediaRecorder && mediaRecorder.state === 'recording') return;
+    if (lastClipUrl) {
+      URL.revokeObjectURL(lastClipUrl);
+      lastClipUrl = '';
+    }
+    recordedChunks = [];
+    const options = pickRecorderOptions();
+    try {
+      mediaRecorder = new MediaRecorder(recordDest.stream, options);
+    } catch {
+      mediaRecorder = new MediaRecorder(recordDest.stream);
+    }
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size) recordedChunks.push(event.data);
+    };
+    mediaRecorder.onstop = () => {
+      const type = mediaRecorder?.mimeType || 'audio/webm';
+      const blob = new Blob(recordedChunks, { type });
+      const ext = type.includes('ogg') ? 'ogg' : 'webm';
+      lastClipUrl = URL.createObjectURL(blob);
+      els.downloadClipLink.href = lastClipUrl;
+      els.downloadClipLink.download = `chatpool-${roomId}-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+      els.downloadClipLink.hidden = false;
+      setRecordStatus('clip ready');
+      updateRecordButton(false);
+      window.setTimeout(() => setRecordStatus(''), 4000);
+    };
+    mediaRecorder.start(250);
+    recordingStartedAt = performance.now();
+    els.downloadClipLink.hidden = true;
+    updateRecordButton(true);
+    setRecordStatus('00:00');
+    clearInterval(recordingTimer);
+    recordingTimer = window.setInterval(() => {
+      const seconds = Math.floor((performance.now() - recordingStartedAt) / 1000);
+      setRecordStatus(formatTime(seconds));
+    }, 250);
+  }
+
+  function stopRoomRecording() {
+    if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+    mediaRecorder.stop();
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+
+  function updateRecordButton(recording) {
+    if (!els.recordRoomBtn) return;
+    els.recordRoomBtn.textContent = recording ? '■ Stop' : '● Rec room';
+    els.recordRoomBtn.classList.toggle('recording', recording);
+  }
+
+  function setRecordStatus(text) {
+    if (els.recordStatus) els.recordStatus.textContent = text || '';
+  }
+
+  function formatTime(total) {
+    const mm = String(Math.floor(total / 60)).padStart(2, '0');
+    const ss = String(total % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+
+  function pickRecorderOptions() {
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg'];
+    const type = types.find(t => MediaRecorder.isTypeSupported?.(t));
+    return type ? { mimeType: type } : {};
+  }
+
   function isSilentControlKey(key) {
     return ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key);
   }
@@ -758,29 +848,35 @@
     const audienceCount = participants.filter(p => p.online && p.mode === 'audience').length;
 
     els.joinBtn.textContent = joined ? 'Joined' : (new URL(location.href).pathname.startsWith('/r/') ? 'Join this jam' : 'Join jam');
-    els.modeStatus.textContent = your ? `${your.mode}${your.isHost ? ' / host' : ''}` : 'not joined';
-    els.modeStatus.classList.toggle('live', Boolean(your?.mode === 'player'));
-    els.modeStatus.classList.toggle('muted', Boolean(your?.mode === 'audience'));
+    if (els.modeStatus) els.modeStatus.textContent = your ? `${your.mode}${your.isHost ? ' / host' : ''}` : 'not joined';
     els.clearMineBtn.disabled = !your || your.mode !== 'player';
     els.resetRoomBtn.disabled = !isHost;
     els.tempo.disabled = !isHost;
     els.tempoHint.textContent = isHost ? 'you control this' : 'host controls this';
     els.composer.disabled = !joined;
     els.commitBtn.disabled = !joined;
+    if (els.recordRoomBtn) els.recordRoomBtn.disabled = !joined || !window.MediaRecorder;
     els.composer.placeholder = your?.mode === 'audience'
-      ? 'Band is full — chat as audience…'
+      ? 'Band is full — chat here while you wait…'
       : your?.role
-        ? `Type as ${ROLE_LABEL[your.role]} — Enter replaces your loop…`
-        : 'Join room, then type here…';
+        ? `Type as ${ROLE_LABEL[your.role]}…`
+        : 'Join, then type here…';
     els.composerHelp.textContent = your?.mode === 'audience'
-      ? 'Audience messages appear in chat but do not make a main layer yet.'
-      : 'When you start typing, your old loop steps aside. Press Enter or Send to replace it with the new rhythm.';
+      ? 'You are in the audience. Your messages join the chat; you will get a layer when a spot opens.'
+      : your?.role
+        ? `You are ${ROLE_LABEL[your.role]}. Each message rewrites your layer.`
+        : 'Chat first. Your typing becomes your layer.';
 
-    els.inviteTitle.textContent = `${roomId}'s jam`;
-    els.roomKicker.textContent = joined ? 'You are in the room' : (new URL(location.href).pathname.startsWith('/r/') ? 'You were invited to a jam' : 'Create or join a jam');
+    document.querySelector('.top-copy')?.classList.toggle('joined', joined);
+    els.inviteTitle.textContent = joined
+      ? `${roomId} · ${your?.mode === 'player' ? `you are ${ROLE_LABEL[your.role]}` : your?.mode === 'audience' ? 'you are audience' : 'live jam'}`
+      : (new URL(location.href).pathname.startsWith('/r/') ? `You were invited to ${roomId}.` : 'Start a typing jam.');
+    els.roomKicker.textContent = joined
+      ? `${playerCount}/${maxPlayers} players live${audienceCount ? ` · ${audienceCount} audience` : ''}`
+      : (new URL(location.href).pathname.startsWith('/r/') ? 'Pick a name and join the chat' : 'Create a room, send the link, and chat.');
     els.inviteCopy.textContent = joined
-      ? `${playerCount}/${maxPlayers} players live${audienceCount ? `, ${audienceCount} audience` : ''}. Copy the link and send it to friends.`
-      : 'Create a new room or join this one. The first five people become the band.';
+      ? 'Chat normally. The room turns everyone’s typing into the mix.'
+      : 'First five people become drums, bass, chords, melody, and texture.';
 
     renderMessages();
     renderParticipants();
@@ -814,32 +910,53 @@
 
   function renderParticipants() {
     const online = participants.filter(p => p.online);
+    const players = online.filter(p => p.mode === 'player');
+    const audience = online.filter(p => p.mode === 'audience');
+
     els.capacityBar.innerHTML = '';
-    ROLES.forEach((role) => {
-      const holder = online.find(p => p.mode === 'player' && p.role === role);
+    players
+      .sort((a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role))
+      .forEach((p) => {
+        const pill = document.createElement('span');
+        pill.className = 'capacity-pill';
+        pill.style.setProperty('--track-accent', ROLE_ACCENT[p.role] || ROLE_ACCENT.audience);
+        pill.textContent = `${ROLE_LABEL[p.role]} ${p.name}${p.clientId === clientId ? ' / you' : ''}`;
+        els.capacityBar.appendChild(pill);
+      });
+    if (audience.length) {
       const pill = document.createElement('span');
-      pill.className = `capacity-pill ${holder ? 'filled' : ''}`;
-      pill.style.setProperty('--track-accent', ROLE_ACCENT[role]);
-      pill.textContent = holder ? `${ROLE_LABEL[role]} ${holder.name}${holder.isHost ? ' · host' : ''}` : `${ROLE_LABEL[role]} open`;
+      pill.className = 'capacity-pill';
+      pill.style.setProperty('--track-accent', ROLE_ACCENT.audience);
+      pill.textContent = `👂 ${audience.length} audience`;
       els.capacityBar.appendChild(pill);
-    });
+    }
 
     els.participants.innerHTML = '';
     if (!online.length) {
       const pill = document.createElement('span');
       pill.className = 'participant-pill empty';
-      pill.textContent = 'Waiting for people…';
+      pill.textContent = 'No one here yet';
       els.participants.appendChild(pill);
       return;
     }
-    online.forEach((p) => {
+    const me = online.find(p => p.clientId === clientId);
+    const ordered = me ? [me, ...online.filter(p => p.clientId !== clientId)] : online;
+    ordered.slice(0, 7).forEach((p) => {
       const pill = document.createElement('span');
       pill.className = 'participant-pill';
       pill.classList.toggle('is-me', p.clientId === clientId);
       pill.style.setProperty('--track-accent', ROLE_ACCENT[p.role] || ROLE_ACCENT.audience);
-      pill.textContent = `${p.name}${p.mode === 'audience' ? ' · audience' : ''}${p.isHost ? ' · host' : ''}`;
+      pill.textContent = p.mode === 'player'
+        ? `${ROLE_LABEL[p.role]} ${p.clientId === clientId ? 'you' : p.name}`
+        : `👂 ${p.clientId === clientId ? 'you' : p.name}`;
       els.participants.appendChild(pill);
     });
+    if (online.length > 7) {
+      const more = document.createElement('span');
+      more.className = 'participant-pill';
+      more.textContent = `+${online.length - 7}`;
+      els.participants.appendChild(more);
+    }
   }
 
   function renderTracks() {
@@ -847,13 +964,14 @@
     const sorted = Array.from(tracks.values()).sort((a, b) => {
       const ai = ROLES.indexOf(a.role);
       const bi = ROLES.indexOf(b.role);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || String(a.name).localeCompare(String(b.name));
+      const meDelta = (b.clientId === clientId ? 1 : 0) - (a.clientId === clientId ? 1 : 0);
+      return meDelta || (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || String(a.name).localeCompare(String(b.name));
     });
 
     if (!sorted.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'The band is empty. First five players become drums, bass, chords, melody, and texture.';
+      empty.textContent = 'No layers yet. The first people to join become the band.';
       els.tracks.appendChild(empty);
       return;
     }
@@ -862,15 +980,17 @@
       const node = els.trackTemplate.content.firstElementChild.cloneNode(true);
       const accent = ROLE_ACCENT[track.role] || ROLE_ACCENT.audience;
       const isFresh = (Date.now() + clockOffset - Number(track.updatedAt || 0)) / 1000 < FRESH_BOOST_SECONDS;
+      const isMine = track.clientId === clientId;
+      const isTyping = Boolean(track.isTyping || (isMine && isTypingNewPhrase));
       node.style.setProperty('--track-accent', accent);
-      node.classList.toggle('fresh', isFresh);
+      node.classList.toggle('fresh', isFresh || isMine);
       node.classList.toggle('muted', muted.has(track.clientId));
-      node.classList.toggle('typing', Boolean(track.isTyping || (track.clientId === clientId && isTypingNewPhrase)));
-      node.querySelector('.track-name').textContent = `${track.name || 'someone'}${track.clientId === clientId ? ' / you' : ''}${track.isTyping || (track.clientId === clientId && isTypingNewPhrase) ? ' / typing' : ''}`;
+      node.classList.toggle('typing', isTyping);
+      node.querySelector('.track-name').textContent = `${isMine ? 'You' : track.name || 'someone'}${track.isTyping ? ' / typing' : ''}`;
       node.querySelector('.track-role').textContent = ROLE_LABEL[track.role] || track.role;
-      node.querySelector('.track-caption').textContent = track.isTyping || (track.clientId === clientId && isTypingNewPhrase)
-        ? 'Recording a new phrase… previous loop is muted.'
-        : track.text ? `“${track.text}”` : 'No phrase yet.';
+      node.querySelector('.track-caption').textContent = isTyping
+        ? 'typing now…'
+        : track.text ? `“${track.text}”` : 'waiting for first message';
 
       const muteBtn = node.querySelector('.mute-btn');
       muteBtn.textContent = muted.has(track.clientId) ? 'unmute' : 'mute';
