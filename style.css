@@ -103,7 +103,6 @@ h1{margin:0;font-size:clamp(2.2rem,6vw,5.8rem);line-height:.93;letter-spacing:-.
 .capacity-pill.filled{border-style:solid;color:var(--text);background:rgba(255,255,255,.035)}
 .message-card.system-message{opacity:.78;background:rgba(255,255,255,.025)}
 .message-card.system-message .message-meta{color:var(--muted)}
-.track-card.away{opacity:.68}
 #tempoHint{color:var(--muted);font-weight:500;margin-left:4px;font-size:.78rem}
 @media (max-width:900px){.invite-card{grid-template-columns:1fr}.invite-actions{grid-template-columns:1fr}}
 
@@ -128,7 +127,6 @@ h1{margin:0;font-size:clamp(2.2rem,6vw,5.8rem);line-height:.93;letter-spacing:-.
 .room-actions .primary{min-width:150px}
 .room-card .invite-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;min-width:0}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-.transport-row button:nth-child(4){display:none}
 @media (max-width:1100px){
   .room-card{grid-template-columns:1fr}
   .room-main{grid-template-columns:1fr}
@@ -139,3 +137,11 @@ h1{margin:0;font-size:clamp(2.2rem,6vw,5.8rem);line-height:.93;letter-spacing:-.
   .room-actions{display:grid;grid-template-columns:1fr;width:100%}
   .room-actions .primary{min-width:0}
 }
+
+/* v5: live typing + mobile send */
+.composer-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+#commitBtn{min-width:86px}
+.track-card.typing{opacity:.72;border-style:dashed}
+.track-card.typing .step.has-note::before{opacity:.35}
+.track-card.typing .track-caption{color:var(--accent)}
+@media (max-width:600px){.composer-line{grid-template-columns:1fr}.composer-line #commitBtn{width:100%}}

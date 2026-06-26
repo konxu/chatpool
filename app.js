@@ -28,7 +28,6 @@
     tempo: $('#tempo'),
     tempoLabel: $('#tempoLabel'),
     tempoHint: $('#tempoHint'),
-    playBtn: $('#playBtn'),
     clearMineBtn: $('#clearMineBtn'),
     resetRoomBtn: $('#resetRoomBtn'),
     roomCard: $('#roomCard'),
@@ -43,6 +42,7 @@
     inviteLink: $('#inviteLink'),
     copyInviteBtn: $('#copyInviteBtn'),
     composer: $('#composer'),
+    commitBtn: $('#commitBtn'),
     composerHelp: $('#composerHelp'),
     chatLog: $('#chatLog'),
     tracks: $('#tracks'),
@@ -88,6 +88,10 @@
   let volumePublishTimer = null;
   let typedEvents = [];
   let captureStart = 0;
+  let isTypingNewPhrase = false;
+  let lastPhysicalKeyAt = 0;
+  let typingStateTimer = null;
+  let scheduledPhraseKeys = new Set();
 
   clearOldPersistedRoomState();
   els.nameInput.value = name;
@@ -99,16 +103,6 @@
     await ensureAudio();
     syncTransport();
     startScheduler();
-  });
-
-  els.playBtn.addEventListener('click', async () => {
-    await ensureAudio();
-    isPlaying = !isPlaying;
-    els.playBtn.textContent = isPlaying ? 'Pause loop' : 'Play loop';
-    if (isPlaying) {
-      syncTransport();
-      startScheduler();
-    }
   });
 
   els.tempo.addEventListener('input', () => {
@@ -139,8 +133,15 @@
     }
   });
 
-  els.clearMineBtn.addEventListener('click', () => send({ type: 'clear_mine' }));
+  els.clearMineBtn.addEventListener('click', () => {
+    sendTypingState(false, true);
+    send({ type: 'clear_mine' });
+  });
   els.resetRoomBtn.addEventListener('click', () => send({ type: 'reset_room' }));
+  els.commitBtn.addEventListener('click', async () => {
+    await ensureAudio();
+    commitPhrase();
+  });
   els.composer.addEventListener('keydown', async (e) => {
     if (!joined) return;
     await ensureAudio();
@@ -149,15 +150,32 @@
       commitPhrase();
       return;
     }
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (!captureStart) captureStart = performance.now();
-    const key = normaliseKey(e.key);
-    typedEvents.push({ key, t: performance.now() - captureStart });
-    playTypingPreview(key, typedEvents.length - 1);
-    updateMeter();
+    if (e.metaKey || e.ctrlKey || e.altKey || isSilentControlKey(e.key)) return;
+    lastPhysicalKeyAt = performance.now();
+    captureKeyEvent(normaliseKey(e.key));
   });
 
-  els.composer.addEventListener('input', updateMeter);
+  // Mobile virtual keyboards often do not emit reliable keydown events.
+  // beforeinput gives us per-character timing for phones without double-counting desktop keydown.
+  els.composer.addEventListener('beforeinput', async (e) => {
+    if (!joined) return;
+    const now = performance.now();
+    if (now - lastPhysicalKeyAt < 80) return;
+    await ensureAudio();
+    if (e.inputType === 'insertText' || e.inputType === 'insertCompositionText') {
+      const chars = e.data ? Array.from(e.data) : ['.'];
+      chars.forEach((char) => captureKeyEvent(char === ' ' ? 'Space' : char));
+    } else if (e.inputType === 'deleteContentBackward') {
+      captureKeyEvent('Backspace');
+    } else if (e.inputType === 'insertLineBreak') {
+      commitPhrase();
+    }
+  });
+
+  els.composer.addEventListener('input', () => {
+    updateMeter();
+    if (!els.composer.value && !typedEvents.length) sendTypingState(false);
+  });
 
   window.addEventListener('beforeunload', () => {
     if (socket && socket.readyState === WebSocket.OPEN) socket.close(1000, 'leaving');
@@ -339,9 +357,10 @@
   }
 
   function tickScheduler() {
-    if (!audio || !isPlaying) return;
+    if (!audio) return;
     if (!nextStepAt || nextStepAt < audio.currentTime - 0.1) syncTransport();
-    const lookahead = 0.12;
+    const lookahead = 0.16;
+    schedulePhraseEvents(audio.currentTime, audio.currentTime + lookahead);
     while (nextStepAt < audio.currentTime + lookahead) {
       scheduleStep(nextStepToSchedule, nextStepAt);
       currentStep = nextStepToSchedule;
@@ -351,8 +370,12 @@
     renderTimeline();
   }
 
+  function getBeatSeconds() {
+    return 60 / Math.max(40, bpm);
+  }
+
   function getStepSeconds() {
-    return 60 / Math.max(40, bpm) / 4;
+    return getBeatSeconds() / 4;
   }
 
   function positiveModulo(n, m) {
@@ -361,13 +384,52 @@
 
   function scheduleStep(step, time) {
     for (const track of tracks.values()) {
-      if (muted.has(track.clientId)) continue;
+      const currentlyTyping = track.isTyping || (track.clientId === clientId && isTypingNewPhrase);
+      if (muted.has(track.clientId) || currentlyTyping) continue;
+      if (Array.isArray(track.events) && track.events.length) continue;
       const notes = Array.isArray(track.loop?.[step]) ? track.loop[step] : [];
       if (!notes.length) continue;
       const volume = getTrackVolume(track) * getFreshBoost(track);
       notes.slice(0, 5).forEach((note, index) => {
         playNote(track.role, note, time + index * 0.012, volume);
       });
+    }
+  }
+
+  function schedulePhraseEvents(windowStart, windowEnd) {
+    if (!audio) return;
+    const serverNow = Date.now() + clockOffset;
+    const windowStartServer = serverNow + (windowStart - audio.currentTime) * 1000;
+    const windowEndServer = serverNow + (windowEnd - audio.currentTime) * 1000;
+    const beatMs = getBeatSeconds() * 1000;
+
+    if (scheduledPhraseKeys.size > 2500) scheduledPhraseKeys = new Set(Array.from(scheduledPhraseKeys).slice(-800));
+
+    for (const track of tracks.values()) {
+      const currentlyTyping = track.isTyping || (track.clientId === clientId && isTypingNewPhrase);
+      if (muted.has(track.clientId) || currentlyTyping) continue;
+      const events = Array.isArray(track.events) ? track.events : [];
+      if (!events.length) continue;
+      const bars = [1, 2, 4].includes(Number(track.bars)) ? Number(track.bars) : 1;
+      const cycleMs = bars * 4 * beatMs;
+      const phraseId = track.phraseId || `${track.clientId}-${track.updatedAt || 0}`;
+      const startIndex = Math.floor((windowStartServer - roomStartedAt) / cycleMs) - 1;
+      const endIndex = Math.floor((windowEndServer - roomStartedAt) / cycleMs) + 1;
+      const volume = getTrackVolume(track) * getFreshBoost(track);
+
+      for (let cycle = startIndex; cycle <= endIndex; cycle++) {
+        if (cycle < 0) continue;
+        const cycleStart = roomStartedAt + cycle * cycleMs;
+        events.forEach((event, index) => {
+          const eventServer = cycleStart + Number(event.tBeats || 0) * beatMs;
+          if (eventServer < windowStartServer || eventServer > windowEndServer) return;
+          const key = `${phraseId}:${cycle}:${index}`;
+          if (scheduledPhraseKeys.has(key)) return;
+          scheduledPhraseKeys.add(key);
+          const when = audio.currentTime + (eventServer - serverNow) / 1000;
+          playNote(track.role, event.note || event, Math.max(audio.currentTime + 0.002, when), volume);
+        });
+      }
     }
   }
 
@@ -524,12 +586,37 @@
     source.stop(time + duration + 0.03);
   }
 
+  function isSilentControlKey(key) {
+    return ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key);
+  }
+
   function normaliseKey(key) {
     if (key === ' ') return 'Space';
     if (key === 'Backspace') return 'Backspace';
     if (key === 'Tab') return 'Tab';
     if (key.length === 1) return key;
     return key.slice(0, 18);
+  }
+
+  function captureKeyEvent(key) {
+    if (!joined) return;
+    if (!captureStart) captureStart = performance.now();
+    sendTypingState(true);
+    const now = performance.now();
+    typedEvents.push({ key, t: now - captureStart });
+    playTypingPreview(key, typedEvents.length - 1);
+    updateMeter();
+  }
+
+  function sendTypingState(active, immediate = false) {
+    if (!joined || your?.mode !== 'player') return;
+    const next = Boolean(active);
+    if (isTypingNewPhrase === next && !immediate) return;
+    isTypingNewPhrase = next;
+    clearTimeout(typingStateTimer);
+    const publish = () => send({ type: 'typing_state', active: next });
+    if (immediate) publish();
+    else typingStateTimer = window.setTimeout(publish, next ? 20 : 80);
   }
 
   function commitPhrase() {
@@ -543,12 +630,15 @@
     }
 
     const role = your?.role || 'drums';
-    const loop = eventsToLoop(typedEvents, text, role);
+    const phrase = eventsToPhrasePayload(typedEvents, text, role);
+    sendTypingState(false, true);
     send({
       type: 'phrase',
       id: uid('phrase'),
       text: text || '(silent typing)',
-      loop,
+      loop: phrase.loop,
+      events: phrase.events,
+      bars: phrase.bars,
       rawCount: typedEvents.length,
       volume: getMyServerVolume()
     });
@@ -559,6 +649,7 @@
     els.composer.value = '';
     typedEvents = [];
     captureStart = 0;
+    isTypingNewPhrase = false;
     updateMeter();
   }
 
@@ -610,27 +701,51 @@
     playNote(role, note, audio.currentTime + 0.004, Math.min(0.72, getMyServerVolume()) * 0.62);
   }
 
-  function eventsToLoop(events, text, role) {
-    const loop = emptyLoop();
+  function eventsToPhrasePayload(events, text, role) {
     const cleanText = text || events.map(e => e.key === 'Space' ? ' ' : e.key[0] || '').join('') || '...';
-    const source = events.length ? events : cleanText.split('').map((char, i) => ({ key: char === ' ' ? 'Space' : char, t: i * 110 }));
-    const lastTime = Math.max(450, source[source.length - 1]?.t || 450);
-    const phraseMs = Math.max(1100, Math.min(5600, lastTime + 180));
+    const source = events.length
+      ? events
+      : cleanText.split('').map((char, i) => ({ key: char === ' ' ? 'Space' : char, t: i * 110 }));
 
-    source.forEach((event, i) => {
+    const beatMs = getBeatSeconds() * 1000;
+    const barMs = beatMs * 4;
+    const lastTime = Math.max(280, source[source.length - 1]?.t || 280);
+    const rawPhraseMs = Math.max(500, lastTime + 260);
+    const bars = rawPhraseMs <= barMs * 1.05 ? 1 : rawPhraseMs <= barMs * 2.05 ? 2 : 4;
+    const containerMs = bars * barMs;
+    const scale = rawPhraseMs > containerMs - 120 ? (containerMs - 120) / rawPhraseMs : 1;
+    const softGridMs = beatMs / 4;
+
+    const phraseEvents = source.slice(0, 180).map((event, i) => {
       const key = event.key || cleanText[i % cleanText.length] || '.';
-      const rawStep = Math.round((event.t / phraseMs) * STEPS);
-      const step = positiveModulo(rawStep, STEPS);
       const prev = source[i - 1];
       const gap = prev ? Math.max(20, event.t - prev.t) : 180;
-      loop[step].push(noteFromKey(key, i, role, source.length, gap));
+      const naturalMs = Math.max(0, event.t * scale);
+      const nearestGrid = Math.round(naturalMs / softGridMs) * softGridMs;
+      const distance = Math.abs(nearestGrid - naturalMs);
+      // Very light magnetic pull: enough to sit in the same room, not enough to erase hand rhythm.
+      const nudgedMs = distance < 90 ? naturalMs * 0.88 + nearestGrid * 0.12 : naturalMs;
+      return {
+        tBeats: Math.max(0, Math.min(bars * 4 - 0.05, nudgedMs / beatMs)),
+        note: noteFromKey(key, i, role, source.length, gap)
+      };
     });
 
-    // Keep extremely sparse phrases audible.
+    const loop = phraseEventsToGrid(phraseEvents, bars);
     if (source.length < 4 && role === 'drums') {
-      [0, 4, 8, 12].forEach((step, i) => loop[step].push({ key: 'pulse', velocity: 0.38, drum: i % 2 ? 'hat' : 'kick', degree: 0 }));
+      [0, 4, 8, 12].forEach((step, i) => loop[step].push({ key: 'pulse', velocity: 0.26, drum: i % 2 ? 'hat' : 'kick', degree: 0 }));
     }
-    return loop.map(step => step.slice(0, 5));
+    return { bars, events: phraseEvents, loop: loop.map(step => step.slice(0, 7)) };
+  }
+
+  function phraseEventsToGrid(events, bars) {
+    const loop = emptyLoop();
+    const totalBeats = bars * 4;
+    events.forEach((event) => {
+      const step = Math.max(0, Math.min(STEPS - 1, Math.floor((Number(event.tBeats || 0) / totalBeats) * STEPS)));
+      loop[step].push(event.note || event);
+    });
+    return loop;
   }
 
   function renderAll() {
@@ -651,6 +766,7 @@
     els.tempo.disabled = !isHost;
     els.tempoHint.textContent = isHost ? 'you control this' : 'host controls this';
     els.composer.disabled = !joined;
+    els.commitBtn.disabled = !joined;
     els.composer.placeholder = your?.mode === 'audience'
       ? 'Band is full — chat as audience…'
       : your?.role
@@ -658,7 +774,7 @@
         : 'Join room, then type here…';
     els.composerHelp.textContent = your?.mode === 'audience'
       ? 'Audience messages appear in chat but do not make a main layer yet.'
-      : 'Each new message rewrites your current layer. Your fresh layer gets a short volume boost.';
+      : 'When you start typing, your old loop steps aside. Press Enter or Send to replace it with the new rhythm.';
 
     els.inviteTitle.textContent = `${roomId}'s jam`;
     els.roomKicker.textContent = joined ? 'You are in the room' : (new URL(location.href).pathname.startsWith('/r/') ? 'You were invited to a jam' : 'Create or join a jam');
@@ -749,10 +865,12 @@
       node.style.setProperty('--track-accent', accent);
       node.classList.toggle('fresh', isFresh);
       node.classList.toggle('muted', muted.has(track.clientId));
-      node.classList.toggle('away', Boolean(track.isAway));
-      node.querySelector('.track-name').textContent = `${track.name || 'someone'}${track.clientId === clientId ? ' / you' : ''}${track.isAway ? ' / away' : ''}`;
+      node.classList.toggle('typing', Boolean(track.isTyping || (track.clientId === clientId && isTypingNewPhrase)));
+      node.querySelector('.track-name').textContent = `${track.name || 'someone'}${track.clientId === clientId ? ' / you' : ''}${track.isTyping || (track.clientId === clientId && isTypingNewPhrase) ? ' / typing' : ''}`;
       node.querySelector('.track-role').textContent = ROLE_LABEL[track.role] || track.role;
-      node.querySelector('.track-caption').textContent = track.text ? `“${track.text}”` : 'No phrase yet.';
+      node.querySelector('.track-caption').textContent = track.isTyping || (track.clientId === clientId && isTypingNewPhrase)
+        ? 'Recording a new phrase… previous loop is muted.'
+        : track.text ? `“${track.text}”` : 'No phrase yet.';
 
       const muteBtn = node.querySelector('.mute-btn');
       muteBtn.textContent = muted.has(track.clientId) ? 'unmute' : 'mute';

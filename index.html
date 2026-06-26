@@ -25,10 +25,9 @@
           <input id="tempo" type="range" min="60" max="150" value="96" disabled />
         </div>
         <div class="transport-row">
-          <button id="playBtn">Pause loop</button>
           <button id="clearMineBtn" disabled>Clear mine</button>
           <button id="resetRoomBtn" disabled>Reset room</button>
-          </div>
+        </div>
       </div>
     </section>
 
@@ -67,7 +66,10 @@
         <div id="chatLog" class="chat-log" aria-live="polite"></div>
         <div class="composer-wrap">
           <div id="recordingMeter" class="recording-meter"><span></span></div>
-          <input id="composer" class="composer" placeholder="Join room, then type here…" disabled autocomplete="off" />
+          <div class="composer-line">
+            <input id="composer" class="composer" placeholder="Join room, then type here…" disabled autocomplete="off" inputmode="text" />
+            <button id="commitBtn" class="primary" disabled>Send</button>
+          </div>
           <p class="microcopy" id="composerHelp">Players rewrite their own loop with every message. Audience messages appear in chat but do not make a main layer.</p>
         </div>
       </section>

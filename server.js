@@ -71,6 +71,39 @@ function onlineParticipants(room) {
   return Array.from(room.participants.values()).filter(p => p.online);
 }
 
+function promoteWaitingAudience(room) {
+  const used = new Set(activePlayers(room).map(p => p.role));
+  const openRoles = ROLES.filter(role => !used.has(role));
+  if (!openRoles.length) return;
+
+  const waiting = onlineParticipants(room)
+    .filter(p => p.mode === 'audience')
+    .sort((a, b) => Number(a.joinedAt || 0) - Number(b.joinedAt || 0));
+
+  for (const role of openRoles) {
+    const next = waiting.shift();
+    if (!next) break;
+    next.mode = 'player';
+    next.role = role;
+    next.lastSeen = Date.now();
+    room.tracks.set(next.clientId, {
+      clientId: next.clientId,
+      name: next.name,
+      role,
+      loop: emptyLoop(),
+      events: [],
+      bars: 1,
+      at: Date.now(),
+      updatedAt: Date.now(),
+      text: '',
+      volume: DEFAULT_VOLUME,
+      rawCount: 0,
+      isTyping: false
+    });
+    pushMessage(room, { name: 'room', role: 'system', text: `${next.name} moved from audience to ${role}.` });
+  }
+}
+
 function chooseRole(room, clientId, requestedRole) {
   const existing = room.participants.get(clientId);
   const used = new Set(activePlayers(room).filter(p => p.clientId !== clientId).map(p => p.role));
@@ -179,12 +212,14 @@ function joinRoom(client, payload) {
       name: client.name,
       role: assignment.role,
       loop: existingTrack?.loop || emptyLoop(),
+      events: existingTrack?.events || [],
+      bars: existingTrack?.bars || 1,
       at: existingTrack?.at || now,
       updatedAt: existingTrack?.updatedAt || now,
       text: existingTrack?.text || '',
       volume: Number.isFinite(existingTrack?.volume) ? existingTrack.volume : DEFAULT_VOLUME,
       rawCount: existingTrack?.rawCount || 0,
-      isAway: false
+      isTyping: false
     });
   }
 
@@ -211,19 +246,23 @@ function handlePhrase(client, payload) {
   }
 
   const loop = sanitizeLoop(payload.loop);
+  const events = sanitizeEvents(payload.events);
+  const bars = [1, 2, 4].includes(Number(payload.bars)) ? Number(payload.bars) : 1;
   const existingTrack = room.tracks.get(client.clientId);
   room.tracks.set(client.clientId, {
     clientId: client.clientId,
     name: participant.name,
     role: participant.role,
     loop,
+    events,
+    bars,
     at: existingTrack?.at || now,
     updatedAt: now,
     text,
     volume: Number.isFinite(payload.volume) ? Math.max(0, Math.min(1.2, payload.volume)) : existingTrack?.volume ?? DEFAULT_VOLUME,
     rawCount: Number(payload.rawCount || 0),
     phraseId: payload.id || uid('phrase'),
-    isAway: false
+    isTyping: false
   });
   pushMessage(room, { id: payload.id, name: participant.name, role: participant.role, text, at: now });
   broadcastSnapshot(room);
@@ -249,6 +288,29 @@ function sanitizeLoop(loop) {
   return out;
 }
 
+
+function sanitizeEvents(events) {
+  if (!Array.isArray(events)) return [];
+  return events.slice(0, 180).map(event => ({
+    tBeats: Number.isFinite(event?.tBeats) ? Math.max(0, Math.min(16, event.tBeats)) : 0,
+    note: sanitizeNote(event?.note || event)
+  }));
+}
+
+function sanitizeNote(note) {
+  return {
+    key: safeText(note?.key || '', 18),
+    velocity: Number.isFinite(note?.velocity) ? Math.max(0.1, Math.min(1, note.velocity)) : 0.6,
+    accent: Boolean(note?.accent),
+    density: Number.isFinite(note?.density) ? Math.max(1, Math.min(12, note.density)) : 1,
+    drum: safeText(note?.drum || '', 20),
+    degree: Number.isFinite(note?.degree) ? Math.max(0, Math.min(12, note.degree)) : 0,
+    octave: Number.isFinite(note?.octave) ? Math.max(1, Math.min(6, note.octave)) : undefined,
+    quality: Number.isFinite(note?.quality) ? Math.max(0, Math.min(4, note.quality)) : undefined,
+    texture: safeText(note?.texture || '', 20)
+  };
+}
+
 function clearMine(client) {
   const room = rooms.get(client.roomId);
   if (!room) return;
@@ -256,11 +318,28 @@ function clearMine(client) {
   const track = room.tracks.get(client.clientId);
   if (participant && track) {
     track.loop = emptyLoop();
+    track.events = [];
+    track.bars = 1;
     track.text = '';
+    track.isTyping = false;
     track.updatedAt = Date.now();
     pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} cleared their loop.` });
     broadcastSnapshot(room);
   }
+}
+
+
+function updateTypingState(client, payload) {
+  const room = rooms.get(client.roomId);
+  if (!room) return;
+  const participant = room.participants.get(client.clientId);
+  const track = room.tracks.get(client.clientId);
+  if (!participant || !track || participant.mode !== 'player') return;
+  const active = Boolean(payload.active);
+  if (track.isTyping === active) return;
+  track.isTyping = active;
+  track.updatedAt = Date.now();
+  broadcastSnapshot(room);
 }
 
 function updateVolume(client, payload) {
@@ -291,9 +370,11 @@ function resetRoom(client) {
   room.messages = [];
   for (const track of room.tracks.values()) {
     track.loop = emptyLoop();
+    track.events = [];
+    track.bars = 1;
     track.text = '';
+    track.isTyping = false;
     track.updatedAt = Date.now();
-    track.isAway = false;
   }
   pushMessage(room, { name: 'room', role: 'system', text: `${client.name || 'Host'} reset the room.` });
   broadcastSnapshot(room);
@@ -349,6 +430,7 @@ function handleMessage(client, raw) {
   if (payload.type === 'phrase') return handlePhrase(client, payload);
   if (payload.type === 'chat') return handlePhrase(client, payload);
   if (payload.type === 'clear_mine') return clearMine(client);
+  if (payload.type === 'typing_state') return updateTypingState(client, payload);
   if (payload.type === 'volume') return updateVolume(client, payload);
   if (payload.type === 'tempo') return updateTempo(client, payload);
   if (payload.type === 'reset_room') return resetRoom(client);
@@ -366,11 +448,13 @@ function removeClient(client) {
   if (client.replaced) return;
   const participant = room.participants.get(client.clientId);
   if (participant) {
+    const oldMode = participant.mode;
+    const oldRole = participant.role;
     participant.online = false;
     participant.lastSeen = Date.now();
-    const track = room.tracks.get(client.clientId);
-    if (track) track.isAway = true;
-    pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} left. Their last loop stays for now.` });
+    room.tracks.delete(client.clientId);
+    pushMessage(room, { name: 'room', role: 'system', text: `${participant.name} left. Their ${oldRole === 'audience' ? 'spot' : 'loop'} disappeared.` });
+    if (oldMode === 'player') promoteWaitingAudience(room);
   }
   ensureHost(room);
   if (room.clients.size) broadcastSnapshot(room);
