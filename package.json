@@ -1,0 +1,13 @@
+{
+  "name": "type-instrument-looproom",
+  "version": "3.0.0",
+  "private": true,
+  "description": "A real-time multiplayer type-to-loop chatroom prototype.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

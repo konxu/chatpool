@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Looproom — Type Instrument Chat</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">TYPE INSTRUMENT / LOOPROOM V3</p>
+        <h1>A tiny band room where everyone’s typing becomes the song.</h1>
+        <p class="lede">Create a private room, send the link to friends, and each person gets one looping instrument layer. New messages rewrite your layer, so the song keeps changing as the chat moves.</p>
+      </div>
+      <div class="transport-card">
+        <div class="status-row">
+          <span id="networkStatus" class="pill muted">network offline</span>
+          <span id="audioStatus" class="pill muted">audio asleep</span>
+          <span id="roomStatus" class="pill">room: —</span>
+          <span id="modeStatus" class="pill">not joined</span>
+        </div>
+        <button id="startAudioBtn" class="primary">Start audio</button>
+        <div class="tempo-row">
+          <label for="tempo">Tempo <strong id="tempoLabel">96</strong> BPM <span id="tempoHint">host controls this</span></label>
+          <input id="tempo" type="range" min="60" max="150" value="96" disabled />
+        </div>
+        <div class="transport-row">
+          <button id="playBtn">Pause loop</button>
+          <button id="clearMineBtn" disabled>Clear mine</button>
+          <button id="resetRoomBtn" disabled>Reset room</button>
+          <button id="demoBtn" disabled>Add demo layer</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="join-card" id="joinCard">
+      <label>
+        Display name
+        <input id="nameInput" maxlength="18" placeholder="xyxy" />
+      </label>
+      <label>
+        Room
+        <input id="roomInput" maxlength="24" value="toastie" />
+      </label>
+      <label>
+        Join as
+        <select id="roleSelect">
+          <option value="auto">auto by join order</option>
+          <option value="drums">drums</option>
+          <option value="bass">bass</option>
+          <option value="chords">chords</option>
+          <option value="melody">melody</option>
+          <option value="texture">texture</option>
+        </select>
+      </label>
+      <button id="createRoomBtn">New room</button>
+      <button id="joinBtn" class="primary">Join room</button>
+    </section>
+
+    <section class="invite-card" id="inviteCard">
+      <div>
+        <strong id="inviteTitle">Invite friends</strong>
+        <p id="inviteCopy">Join a room first, then copy the link and send it around.</p>
+      </div>
+      <div class="invite-actions">
+        <input id="inviteLink" readonly value="" aria-label="Invite link" />
+        <button id="copyInviteBtn">Copy link</button>
+      </div>
+    </section>
+
+    <section class="room-grid">
+      <section class="panel chat-panel">
+        <div class="panel-head">
+          <h2>Chat</h2>
+          <span class="hint" id="chatHint">Enter = commit loop</span>
+        </div>
+        <div id="chatLog" class="chat-log" aria-live="polite"></div>
+        <div class="composer-wrap">
+          <div id="recordingMeter" class="recording-meter"><span></span></div>
+          <input id="composer" class="composer" placeholder="Join room, then type here…" disabled autocomplete="off" />
+          <p class="microcopy" id="composerHelp">Players rewrite their own loop with every message. Audience messages appear in chat but do not make a main layer.</p>
+        </div>
+      </section>
+
+      <section class="panel band-panel">
+        <div class="panel-head">
+          <h2>The band</h2>
+          <span id="stepReadout" class="hint">step 1 / 16</span>
+        </div>
+        <div id="timeline" class="timeline" aria-hidden="true"></div>
+        <div id="capacityBar" class="capacity-bar"></div>
+        <div id="participants" class="participants" aria-label="People in room"></div>
+        <div id="tracks" class="tracks"></div>
+      </section>
+    </section>
+  </main>
+
+  <template id="messageTemplate">
+    <article class="message-card">
+      <div class="message-meta"></div>
+      <p></p>
+    </article>
+  </template>
+
+  <template id="trackTemplate">
+    <article class="track-card">
+      <div class="track-top">
+        <div>
+          <strong class="track-name"></strong>
+          <span class="track-role"></span>
+        </div>
+        <div class="track-controls">
+          <button class="mute-btn">mute</button>
+          <label class="volume-control">
+            <span>vol <b class="volume-value">78%</b></span>
+            <input class="volume-slider" type="range" min="0" max="1.2" step="0.01" value="0.78" />
+          </label>
+        </div>
+      </div>
+      <p class="track-caption"></p>
+      <div class="step-grid"></div>
+    </article>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>
